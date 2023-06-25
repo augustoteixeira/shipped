@@ -47,6 +47,14 @@ pub struct State {
     pub tiles: [Tile; WIDTH * HEIGHT],
 }
 
+pub struct State {
+    pub codes: [Code; NUM_CODES],
+    pub entities: EntityArray,
+    pub blue_templates: [FullEntity; NUM_SUB_ENTITIES],
+    pub red_templates: [FullEntity; NUM_SUB_ENTITIES],
+    pub tiles: [Tile; WIDTH * HEIGHT],
+}
+
 // SEND TO ANOTHER FILE
 
 #[derive(Debug, Snafu)]
@@ -62,7 +70,7 @@ pub enum Event {
     EntityMove(Pos, Pos),
     AssetsFloorToEntity(Materials, Pos, Pos),
     AssetsEntityToFloor(Materials, Pos, Pos),
-    Shot(Attack),
+    Shoot(Attack),
     Drill(Attack),
     Construct(Construct),
 }
@@ -161,7 +169,14 @@ pub fn update(state: &mut State, event: Event) -> Result<(), UpdateError> {
             state.entities[entity].materials += payload.clone();
             state.tiles[to.to_index()].materials -= payload;
         }
-        Event::Shot(_a) => {}
+        Event::Shoot(a) => {
+            if let Some(e) = state.tiles[a.destination.to_index()].entity_index
+            {
+                if state.entities[e].max_hp <= a.damage {
+                    //state.entities[e]
+                }
+            }
+        }
         Event::Drill(_a) => {}
         Event::Construct(_c) => {}
     }

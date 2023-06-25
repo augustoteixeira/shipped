@@ -107,6 +107,7 @@ impl Materials {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Entity<T> {
     pub hp: usize,
+    pub max_hp: usize,
     pub inventory_size: usize,
     pub materials: Materials,
     pub abilities: Option<Abilities<T>>,

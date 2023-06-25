@@ -8,6 +8,7 @@ fn main() {
     println!("Hello, world!");
     let entity = FullEntity {
         hp: 3,
+        max_hp: 3,
         inventory_size: 4,
         materials: Materials {
             carbon: 0,
