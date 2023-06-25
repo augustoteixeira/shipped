@@ -1,27 +1,114 @@
 use super::constants::NUM_SUB_ENTITIES;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub enum MovementType {
     Still,
     Walk,
-    Fly,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Assets {
+#[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
+pub struct Materials {
     pub carbon: usize,
     pub silicon: usize,
     pub plutonium: usize,
     pub zinc: usize,
-    pub ammo: usize,
+}
+
+impl PartialOrd for Materials {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        let mut result = 0;
+        match (self.carbon.cmp(&other.carbon), result) {
+            (Ordering::Greater, -1) => return None,
+            (Ordering::Less, 0) => result = -1,
+            (Ordering::Greater, 0) => result = 1,
+            (Ordering::Less, 1) => return None,
+            _ => {}
+        }
+        match (self.silicon.cmp(&other.silicon), result) {
+            (Ordering::Greater, -1) => return None,
+            (Ordering::Less, 0) => result = -1,
+            (Ordering::Greater, 0) => result = 1,
+            (Ordering::Less, 1) => return None,
+            _ => {}
+        }
+        match (self.plutonium.cmp(&other.plutonium), result) {
+            (Ordering::Greater, -1) => return None,
+            (Ordering::Less, 0) => result = -1,
+            (Ordering::Greater, 0) => result = 1,
+            (Ordering::Less, 1) => return None,
+            _ => {}
+        }
+        match (self.zinc.cmp(&other.zinc), result) {
+            (Ordering::Greater, -1) => return None,
+            (Ordering::Less, 0) => result = -1,
+            (Ordering::Greater, 0) => result = 1,
+            (Ordering::Less, 1) => return None,
+            _ => {}
+        }
+        return Some(result.cmp(&0));
+    }
+}
+
+impl Add for Materials {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        Self {
+            carbon: self.carbon + other.carbon,
+            silicon: self.silicon + other.silicon,
+            plutonium: self.plutonium + other.plutonium,
+            zinc: self.zinc + other.zinc,
+        }
+    }
+}
+
+impl AddAssign for Materials {
+    fn add_assign(&mut self, other: Self) {
+        *self = Self {
+            carbon: self.carbon + other.carbon,
+            silicon: self.silicon + other.silicon,
+            plutonium: self.plutonium + other.plutonium,
+            zinc: self.zinc + other.zinc,
+        };
+    }
+}
+
+impl Sub for Materials {
+    type Output = Self;
+    fn sub(self, other: Self) -> Self {
+        Self {
+            carbon: self.carbon - other.carbon,
+            silicon: self.silicon - other.silicon,
+            plutonium: self.plutonium - other.plutonium,
+            zinc: self.zinc - other.zinc,
+        }
+    }
+}
+
+impl SubAssign for Materials {
+    fn sub_assign(&mut self, other: Self) {
+        *self = Self {
+            carbon: self.carbon - other.carbon,
+            silicon: self.silicon - other.silicon,
+            plutonium: self.plutonium - other.plutonium,
+            zinc: self.zinc - other.zinc,
+        };
+    }
+}
+
+impl Materials {
+    pub fn volume(&self) -> usize {
+        self.carbon + self.silicon + self.plutonium + self.zinc
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Entity<T> {
     pub hp: usize,
     pub inventory_size: usize,
-    pub assets: Assets,
+    pub materials: Materials,
     pub abilities: Option<Abilities<T>>,
 }
 
@@ -33,15 +120,14 @@ pub struct Abilities<T> {
     pub brain: T,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Half {
-    pub sub_entities: [Option<u8>; 2],
-}
+pub type Half = [Option<u8>; NUM_SUB_ENTITIES];
+
+pub type Code = Vec<u8>;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Full {
-    pub sub_entities: [Option<u8>; NUM_SUB_ENTITIES],
-    pub code: Vec<u8>,
+    pub half: Half,
+    pub code_index: usize,
     pub gas: usize,
 }
 
@@ -56,22 +142,20 @@ pub fn weight(body: &Entity<Full>) -> usize {
     result
 }
 
-pub fn cost(body: FullEntity) -> Assets {
+pub fn cost(body: FullEntity) -> Materials {
     let w = weight(&body);
-    let mut result = body.assets;
+    let mut result = body.materials;
     result.carbon += body.hp * body.hp;
     result.carbon += body.inventory_size * body.inventory_size;
     if let Some(a) = body.abilities {
         match a.movement_type {
             MovementType::Still => {}
             MovementType::Walk => result.plutonium += w,
-            MovementType::Fly => result.plutonium += w * w,
         }
         result.plutonium += a.drill_damage;
         if let Some(d) = a.gun_damage {
             result.plutonium += d * d;
         }
-        result.plutonium += a.brain.code.len();
         result.plutonium += a.brain.gas / 10 + 1;
     }
     result
