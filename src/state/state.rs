@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 use snafu::prelude::*;
+use std::cmp::max;
 use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
-use super::entity::{Code, FullEntity, Materials, Message, Pos};
+use super::entity::{Code, FullEntity, Id, Materials, Message, Pos};
 
 // https://wowpedia.fandom.com/wiki/Warcraft:_Orcs_%26_Humans_missions?file=WarCraft-Orcs%26amp%3BHumans-Orcs-Scenario9-SouthernElwynnForest.png
 
@@ -23,24 +24,18 @@ pub enum Team {
     Red,
 }
 
-pub type Id = usize;
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tile {
     pub materials: Materials,
     pub entity_id: Option<Id>,
 }
 
-#[derive(Debug)]
 //pub struct Tiles<T, const N: usize>(pub [T; WIDTH * HEIGHT]);
 //pub struct Tiles<const N: usize>(pub [Tile; WIDTH * HEIGHT]);
-
-struct Tiles<T, const N: usize>(pub [T; N]);
-
 #[serde_with::serde_as]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct State {
-    pub codes: [Code; NUM_CODES],
+    codes: [Code; NUM_CODES],
     entities: HashMap<Id, FullEntity>,
     next_unique_id: usize,
     blue_templates: [FullEntity; NUM_TEMPLATES],
@@ -69,6 +64,25 @@ pub enum StateError {
 }
 
 impl State {
+    pub fn new(
+        codes: [Code; NUM_CODES],
+        entities: HashMap<Id, FullEntity>,
+        blue_templates: [FullEntity; NUM_TEMPLATES],
+        gray_templates: [FullEntity; NUM_TEMPLATES],
+        red_templates: [FullEntity; NUM_TEMPLATES],
+        tiles: [Tile; WIDTH * HEIGHT],
+    ) -> Self {
+        let next_unique_id = entities.iter().fold(0, |a, (id, _)| max(a, *id));
+        State {
+            codes,
+            entities,
+            next_unique_id,
+            blue_templates,
+            gray_templates,
+            red_templates,
+            tiles,
+        }
+    }
     pub fn has_entity(&self, pos: Pos) -> bool {
         self.tiles[pos.to_index()].entity_id.is_some()
     }

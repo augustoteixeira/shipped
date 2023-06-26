@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
+pub type Id = usize;
+
 #[derive(Serialize, Deserialize, Debug, Snafu, PartialEq, Clone, Copy)]
 pub struct Pos {
     x: usize,
@@ -116,6 +118,19 @@ impl SubAssign for Materials {
 }
 
 impl Materials {
+    pub fn new(
+        carbon: usize,
+        silicon: usize,
+        plutonium: usize,
+        copper: usize,
+    ) -> Self {
+        Materials {
+            carbon,
+            silicon,
+            plutonium,
+            copper,
+        }
+    }
     pub fn volume(&self) -> usize {
         self.carbon + self.silicon + self.plutonium + self.copper
     }
