@@ -1,7 +1,8 @@
+use serde::{Deserialize, Serialize};
 use snafu::prelude::*;
 use std::collections::HashMap;
 
-use super::constants::{HEIGHT, NUM_CODES, NUM_SUB_ENTITIES, WIDTH};
+use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
 use super::entity::{Code, FullEntity, Materials, Message, Pos};
 
 // https://wowpedia.fandom.com/wiki/Warcraft:_Orcs_%26_Humans_missions?file=WarCraft-Orcs%26amp%3BHumans-Orcs-Scenario9-SouthernElwynnForest.png
@@ -15,32 +16,37 @@ use super::entity::{Code, FullEntity, Materials, Message, Pos};
 
 // pub type Geography = [Terrain; WIDTH * HEIGHT];
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum Team {
     Blue,
     Gray,
     Red,
 }
 
-pub struct SerialTile {
-    pub materials: Materials,
-    pub entity_index: Option<usize>,
-}
-
 pub type Id = usize;
 
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Tile {
     pub materials: Materials,
     pub entity_id: Option<Id>,
 }
 
+#[derive(Debug)]
+//pub struct Tiles<T, const N: usize>(pub [T; WIDTH * HEIGHT]);
+//pub struct Tiles<const N: usize>(pub [Tile; WIDTH * HEIGHT]);
+
+struct Tiles<T, const N: usize>(pub [T; N]);
+
+#[serde_with::serde_as]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct State {
     pub codes: [Code; NUM_CODES],
     entities: HashMap<Id, FullEntity>,
     next_unique_id: usize,
-    blue_templates: [FullEntity; NUM_SUB_ENTITIES],
-    gray_templates: [FullEntity; NUM_SUB_ENTITIES],
-    red_templates: [FullEntity; NUM_SUB_ENTITIES],
+    blue_templates: [FullEntity; NUM_TEMPLATES],
+    gray_templates: [FullEntity; NUM_TEMPLATES],
+    red_templates: [FullEntity; NUM_TEMPLATES],
+    #[serde_as(as = "[_; WIDTH * HEIGHT]")]
     tiles: [Tile; WIDTH * HEIGHT],
 }
 
@@ -80,7 +86,7 @@ impl State {
     ) -> Result<(), StateError> {
         ensure!(!self.has_entity(pos), OccupiedTileSnafu { pos });
         ensure!(
-            template < NUM_SUB_ENTITIES,
+            template < NUM_TEMPLATES,
             TemplateOutOfBoundsSnafu { template }
         );
         let mut entity = match team {
@@ -196,124 +202,4 @@ impl State {
         abilities.brain.message = message.clone();
         Ok(())
     }
-}
-
-// SEND TO ANOTHER FILE
-
-#[derive(Debug)]
-pub enum Event {
-    EntityMove(Pos, Pos),
-    AssetsFloorToEntity(Materials, Pos, Pos),
-    AssetsEntityToFloor(Materials, Pos, Pos),
-    Shoot(Attack),
-    Drill(Attack),
-    Construct(Construct),
-    SendMessage(Pos, Message),
-}
-
-#[derive(Debug)]
-pub struct Attack {
-    pub origin: Pos,
-    pub destination: Pos,
-    pub damage: usize,
-}
-
-#[derive(Debug, Clone)]
-pub struct Construct {
-    pub team: Team,
-    pub template_index: usize,
-    pub builder: Pos,
-    pub buildee: Pos,
-}
-
-#[derive(Debug, Snafu)]
-pub enum UpdateError {
-    #[snafu(display("Moving entity from {from:?} to {to:?}"))]
-    EntityMove {
-        source: StateError,
-        from: Pos,
-        to: Pos,
-    },
-    #[snafu(display("Moving {load:?} from {from:?} to entity {to:?}"))]
-    MaterialMoveToEntity {
-        source: StateError,
-        from: Pos,
-        to: Pos,
-        load: Materials,
-    },
-    #[snafu(display("Moving {load:?} from entity {from:?} to {to:?}"))]
-    MaterialMoveToFloor {
-        source: StateError,
-        from: Pos,
-        to: Pos,
-        load: Materials,
-    },
-    #[snafu(display("Attacking: {attack:?}"))]
-    AttackUnit { source: StateError, attack: Attack },
-    #[snafu(display("Construct: {construct:?}"))]
-    ConstructError {
-        source: StateError,
-        construct: Construct,
-    },
-    #[snafu(display("Set message error {} in {:?}", message.emotion, message.pos))]
-    SetMessageError {
-        source: StateError,
-        pos: Pos,
-        message: Message,
-    },
-}
-
-// replay does not try to check logic (like fov). Only the basic necesary
-// for its continued good behavior. the other logic was tested during the
-// generation of the logs.
-pub fn replay(state: &mut State, event: Event) -> Result<(), UpdateError> {
-    match event {
-        Event::EntityMove(from, to) => {
-            state
-                .move_entity(from, to)
-                .context(EntityMoveSnafu { from, to })?;
-        }
-        Event::AssetsFloorToEntity(load, from, to) => {
-            state.move_material_to_entity(from, to, &load).context(
-                MaterialMoveToEntitySnafu {
-                    from,
-                    to,
-                    load: load.clone(),
-                },
-            )?;
-        }
-        Event::AssetsEntityToFloor(load, from, to) => {
-            state.move_material_to_floor(from, to, &load).context(
-                MaterialMoveToFloorSnafu {
-                    from,
-                    to,
-                    load: load.clone(),
-                },
-            )?;
-        }
-        Event::Shoot(a) => {
-            state
-                .attack(a.destination, a.damage)
-                .context(AttackUnitSnafu { attack: a })?;
-        }
-        Event::Drill(a) => {
-            state
-                .attack(a.destination, a.damage)
-                .context(AttackUnitSnafu { attack: a })?;
-        }
-        Event::Construct(c) => {
-            state
-                .build_entity_from_template(c.team, c.template_index, c.buildee)
-                .context(ConstructSnafu {
-                    construct: c.clone(),
-                })?;
-        }
-        Event::SendMessage(pos, message) => {
-            state.set_message(pos, &message).context(SetMessageSnafu {
-                pos,
-                message: message.clone(),
-            })?
-        }
-    }
-    Ok(())
 }
