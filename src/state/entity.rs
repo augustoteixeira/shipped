@@ -14,7 +14,7 @@ pub struct Materials {
     pub carbon: usize,
     pub silicon: usize,
     pub plutonium: usize,
-    pub zinc: usize,
+    pub copper: usize,
 }
 
 impl PartialOrd for Materials {
@@ -41,7 +41,7 @@ impl PartialOrd for Materials {
             (Ordering::Less, 1) => return None,
             _ => {}
         }
-        match (self.zinc.cmp(&other.zinc), result) {
+        match (self.copper.cmp(&other.copper), result) {
             (Ordering::Greater, -1) => return None,
             (Ordering::Less, 0) => result = -1,
             (Ordering::Greater, 0) => result = 1,
@@ -59,7 +59,7 @@ impl Add for Materials {
             carbon: self.carbon + other.carbon,
             silicon: self.silicon + other.silicon,
             plutonium: self.plutonium + other.plutonium,
-            zinc: self.zinc + other.zinc,
+            copper: self.copper + other.copper,
         }
     }
 }
@@ -70,7 +70,7 @@ impl AddAssign for Materials {
             carbon: self.carbon + other.carbon,
             silicon: self.silicon + other.silicon,
             plutonium: self.plutonium + other.plutonium,
-            zinc: self.zinc + other.zinc,
+            copper: self.copper + other.copper,
         };
     }
 }
@@ -82,7 +82,7 @@ impl Sub for Materials {
             carbon: self.carbon - other.carbon,
             silicon: self.silicon - other.silicon,
             plutonium: self.plutonium - other.plutonium,
-            zinc: self.zinc - other.zinc,
+            copper: self.copper - other.copper,
         }
     }
 }
@@ -93,14 +93,14 @@ impl SubAssign for Materials {
             carbon: self.carbon - other.carbon,
             silicon: self.silicon - other.silicon,
             plutonium: self.plutonium - other.plutonium,
-            zinc: self.zinc - other.zinc,
+            copper: self.copper - other.copper,
         };
     }
 }
 
 impl Materials {
     pub fn volume(&self) -> usize {
-        self.carbon + self.silicon + self.plutonium + self.zinc
+        self.carbon + self.silicon + self.plutonium + self.copper
     }
 }
 

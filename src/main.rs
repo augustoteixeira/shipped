@@ -14,7 +14,7 @@ fn main() {
             carbon: 0,
             silicon: 1,
             plutonium: 23,
-            zinc: 5235,
+            copper: 5235,
         },
         abilities: Some(Abilities {
             movement_type: MovementType::Still,

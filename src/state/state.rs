@@ -1,4 +1,5 @@
 use snafu::prelude::*;
+use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_SUB_ENTITIES, WIDTH};
 use super::entity::{Code, FullEntity, Materials};
@@ -29,6 +30,7 @@ impl Pos {
 #[derive(Debug)]
 pub enum Team {
     Blue,
+    Gray,
     Red,
 }
 
@@ -37,9 +39,11 @@ pub struct SerialTile {
     pub entity_index: Option<usize>,
 }
 
+pub type Id = usize;
+
 pub struct Tile {
     pub materials: Materials,
-    pub entity: Option<Box<FullEntity>>,
+    pub entity_id: Option<Id>,
 }
 
 pub struct SerialState {
@@ -52,6 +56,7 @@ pub struct SerialState {
 
 pub struct State {
     pub codes: [Code; NUM_CODES],
+    pub entities: HashMap<Id, Box<FullEntity>>,
     pub blue_templates: [FullEntity; NUM_SUB_ENTITIES],
     pub red_templates: [FullEntity; NUM_SUB_ENTITIES],
     pub tiles: [Tile; WIDTH * HEIGHT],
@@ -63,92 +68,126 @@ pub enum StateError {
     EmptyTile { pos: Pos },
     #[snafu(display("Occupied tile {:?}", pos))]
     OccupiedTile { pos: Pos },
-    #[snafu(display("Floor at {pos:?} does not have {payload:?}"))]
-    NotEnoughMaterialsFloor { pos: Pos, payload: Materials },
-    #[snafu(display("Entity at {pos:?} does not fit {payload:?}"))]
-    NotEnoughSpace { pos: Pos, payload: Materials },
-    #[snafu(display("Entity at {pos:?} does not have {payload:?}"))]
-    NotEnoughMaterialsInEntity { pos: Pos, payload: Materials },
+    #[snafu(display("Floor at {pos:?} does not have {load:?}"))]
+    NoMaterialFloor { pos: Pos, load: Materials },
+    #[snafu(display("Entity at {pos:?} does not fit {load:?}"))]
+    NoSpace { pos: Pos, load: Materials },
+    #[snafu(display("Entity at {pos:?} does not have {load:?}"))]
+    NoMaterialEntity { pos: Pos, load: Materials },
 }
 
 impl State {
     pub fn has_entity(&self, pos: Pos) -> bool {
-        self.tiles[pos.to_index()].entity.is_some()
+        self.tiles[pos.to_index()].entity_id.is_some()
+    }
+    pub fn get_tile(&self, pos: Pos) -> &Tile {
+        &self.tiles[pos.to_index()]
+    }
+    pub fn get_floor_mat(&self, pos: Pos) -> &Materials {
+        &self.tiles[pos.to_index()].materials
+    }
+    pub fn remove_entity(&mut self, pos: Pos) -> Result<(), StateError> {
+        let id = self.tiles[pos.to_index()]
+            .entity_id
+            .ok_or(StateError::EmptyTile { pos: pos })?;
+        self.entities.remove(&id);
+        self.tiles[pos.to_index()].entity_id = None;
+        Ok(())
     }
     pub fn get_mut_entity(
         &mut self,
         pos: Pos,
     ) -> Result<&mut Box<FullEntity>, StateError> {
-        self.tiles[pos.to_index()]
-            .entity
-            .as_mut()
-            .ok_or(StateError::EmptyTile { pos: pos })
+        let id = self
+            .get_tile(pos)
+            .entity_id
+            .ok_or(StateError::EmptyTile { pos: pos })?;
+        Ok(self.entities.get_mut(&id).unwrap())
     }
     pub fn move_entity(
         &mut self,
         from: Pos,
         to: Pos,
     ) -> Result<(), StateError> {
-        if !self.has_entity(from) {
-            return Err(StateError::EmptyTile { pos: from });
-        }
-        if self.has_entity(to) {
-            return Err(StateError::OccupiedTile { pos: to });
-        }
-        let entity = self.tiles.get_mut(from.to_index()).unwrap().entity.take();
-        self.tiles[from.to_index()].entity = None;
-        self.tiles[to.to_index()].entity = entity;
+        ensure!(self.has_entity(from), EmptyTileSnafu { pos: from });
+        ensure!(!self.has_entity(to), OccupiedTileSnafu { pos: to });
+        let id = self.tiles[from.to_index()].entity_id.unwrap();
+        self.tiles[from.to_index()].entity_id = None;
+        self.tiles[to.to_index()].entity_id = Some(id);
         Ok(())
     }
     pub fn move_material_to_entity(
         &mut self,
         from: Pos,
         to: Pos,
-        payload: &Materials,
+        load: &Materials,
     ) -> Result<(), StateError> {
         ensure!(self.has_entity(to), EmptyTileSnafu { pos: to });
         ensure!(
-            self.tiles[from.to_index()].materials.ge(payload),
-            NotEnoughMaterialsFloorSnafu {
+            self.get_floor_mat(from).ge(load),
+            NoMaterialFloorSnafu {
                 pos: from,
-                payload: payload.clone()
+                load: load.clone()
             }
         );
         let entity = self.get_mut_entity(to)?;
         ensure!(
-            entity.inventory_size - entity.materials.volume()
-                >= payload.volume(),
-            NotEnoughSpaceSnafu {
+            entity.inventory_size >= entity.materials.volume() + load.volume(),
+            NoSpaceSnafu {
                 pos: to,
-                payload: payload.clone()
+                load: load.clone()
             }
         );
-        entity.materials += payload.clone();
-        self.tiles[from.to_index()].materials -= payload.clone();
+        entity.materials += load.clone();
+        self.tiles[from.to_index()].materials -= load.clone();
         Ok(())
     }
     pub fn move_material_to_floor(
         &mut self,
         from: Pos,
         to: Pos,
-        payload: &Materials,
+        load: &Materials,
     ) -> Result<(), StateError> {
-        ensure!(self.has_entity(from), EmptyTileSnafu { pos: to });
+        ensure!(self.has_entity(from), EmptyTileSnafu { pos: from });
         let entity = self.get_mut_entity(to)?;
         ensure!(
-            entity.inventory_size >= payload.volume(),
-            NotEnoughMaterialsInEntitySnafu {
+            entity.inventory_size >= load.volume(),
+            NoMaterialEntitySnafu {
                 pos: from,
-                payload: payload.clone()
+                load: load.clone()
             }
         );
-        entity.materials -= payload.clone();
-        self.tiles[from.to_index()].materials += payload.clone();
+        entity.materials -= load.clone();
+        self.tiles[from.to_index()].materials += load.clone();
         Ok(())
     }
+    pub fn attack(
+        &mut self,
+        pos: Pos,
+        damage: usize,
+    ) -> Result<(), StateError> {
+        ensure!(self.has_entity(pos), EmptyTileSnafu { pos });
+        let entity = self.get_mut_entity(pos)?;
+        if entity.hp > damage {
+            entity.hp -= damage;
+        } else {
+            self.remove_entity(pos)?;
+        }
+        Ok(())
+    }
+    //         Event::Shoot(a) => {
+    //             if let Some(entity) = state.tiles[a.destination.to_index()].entity {
+    //                 if entity.max_hp <= a.damage {
+    //                     //state.entities[e]
+    //                 }
+    //             }
+    //         }
 }
 
 // SEND TO ANOTHER FILE
+
+#[derive(Debug)]
+pub struct Message {}
 
 #[derive(Debug)]
 pub enum Event {
@@ -158,6 +197,7 @@ pub enum Event {
     Shoot(Attack),
     Drill(Attack),
     Construct(Construct),
+    //Message(Pos, Team, ?!?)
 }
 
 #[derive(Debug)]
@@ -182,19 +222,19 @@ pub enum UpdateError {
         from: Pos,
         to: Pos,
     },
-    #[snafu(display("Moving {payload:?} from {from:?} to entity {to:?}"))]
+    #[snafu(display("Moving {load:?} from {from:?} to entity {to:?}"))]
     MaterialMoveToEntity {
         source: StateError,
         from: Pos,
         to: Pos,
-        payload: Materials,
+        load: Materials,
     },
-    #[snafu(display("Moving {payload:?} from entity {from:?} to {to:?}"))]
+    #[snafu(display("Moving {load:?} from entity {from:?} to {to:?}"))]
     MaterialMoveToFloor {
         source: StateError,
         from: Pos,
         to: Pos,
-        payload: Materials,
+        load: Materials,
     },
 }
 
@@ -205,21 +245,21 @@ pub fn update(state: &mut State, event: Event) -> Result<(), UpdateError> {
                 .move_entity(from, to)
                 .context(EntityMoveSnafu { from, to })?;
         }
-        Event::AssetsFloorToEntity(payload, from, to) => {
-            state.move_material_to_entity(from, to, &payload).context(
+        Event::AssetsFloorToEntity(load, from, to) => {
+            state.move_material_to_entity(from, to, &load).context(
                 MaterialMoveToEntitySnafu {
                     from,
                     to,
-                    payload: payload.clone(),
+                    load: load.clone(),
                 },
             )?;
         }
-        Event::AssetsEntityToFloor(payload, from, to) => {
-            state.move_material_to_floor(from, to, &payload).context(
+        Event::AssetsEntityToFloor(load, from, to) => {
+            state.move_material_to_floor(from, to, &load).context(
                 MaterialMoveToFloorSnafu {
                     from,
                     to,
-                    payload: payload.clone(),
+                    load: load.clone(),
                 },
             )?;
         }
@@ -232,6 +272,7 @@ pub fn update(state: &mut State, event: Event) -> Result<(), UpdateError> {
         //         }
         //         Event::Drill(_a) => {}
         //         Event::Construct(_c) => {}
+        //         Event::Message(_m)
         _ => {}
     }
     Ok(())
