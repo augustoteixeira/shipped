@@ -35,19 +35,21 @@ fn main() {
             },
         }),
     };
-    let entities = HashMap::new();
+    let mut entities = HashMap::new();
     entities.insert(1, entity.clone());
-    let template = [entity.clone(); NUM_TEMPLATES];
+    let template: [Option<FullEntity>; NUM_TEMPLATES] =
+        std::array::from_fn(|_| None);
     let state = State::new(
-        [vec![]; NUM_CODES],
+        std::array::from_fn(|_| None),
         entities,
         template.clone(),
         template.clone(),
         template.clone(),
-        [Tile {
+        std::array::from_fn(|_| Tile {
+            entity_id: None,
             materials: Materials::new(0, 1, 2, 3),
-        }; WIDTH * HEIGHT],
+        }),
     );
-    let serialized = serde_json::to_string(&entity).unwrap();
+    let serialized = serde_json::to_string(&state).unwrap();
     println!("Serialized = {}", serialized);
 }

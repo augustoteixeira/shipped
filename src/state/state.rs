@@ -35,12 +35,12 @@ pub struct Tile {
 #[serde_with::serde_as]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct State {
-    codes: [Code; NUM_CODES],
+    codes: [Option<Code>; NUM_CODES],
     entities: HashMap<Id, FullEntity>,
     next_unique_id: usize,
-    blue_templates: [FullEntity; NUM_TEMPLATES],
-    gray_templates: [FullEntity; NUM_TEMPLATES],
-    red_templates: [FullEntity; NUM_TEMPLATES],
+    blue_templates: [Option<FullEntity>; NUM_TEMPLATES],
+    gray_templates: [Option<FullEntity>; NUM_TEMPLATES],
+    red_templates: [Option<FullEntity>; NUM_TEMPLATES],
     #[serde_as(as = "[_; WIDTH * HEIGHT]")]
     tiles: [Tile; WIDTH * HEIGHT],
 }
@@ -61,15 +61,17 @@ pub enum StateError {
     TemplateOutOfBounds { template: usize },
     #[snafu(display("Entity in {pos} has no abilities"))]
     NoAbilities { pos: Pos },
+    #[snafu(display("No entity in {team:?} with template{template}"))]
+    NoTemplate { team: Team, template: usize },
 }
 
 impl State {
     pub fn new(
-        codes: [Code; NUM_CODES],
+        codes: [Option<Code>; NUM_CODES],
         entities: HashMap<Id, FullEntity>,
-        blue_templates: [FullEntity; NUM_TEMPLATES],
-        gray_templates: [FullEntity; NUM_TEMPLATES],
-        red_templates: [FullEntity; NUM_TEMPLATES],
+        blue_templates: [Option<FullEntity>; NUM_TEMPLATES],
+        gray_templates: [Option<FullEntity>; NUM_TEMPLATES],
+        red_templates: [Option<FullEntity>; NUM_TEMPLATES],
         tiles: [Tile; WIDTH * HEIGHT],
     ) -> Self {
         let next_unique_id = entities.iter().fold(0, |a, (id, _)| max(a, *id));
@@ -107,7 +109,8 @@ impl State {
             Team::Blue => self.blue_templates[template].clone(),
             Team::Gray => self.gray_templates[template].clone(),
             Team::Red => self.red_templates[template].clone(),
-        };
+        }
+        .ok_or(StateError::NoTemplate { team, template })?;
         entity.pos = pos;
         self.entities.insert(self.next_unique_id, entity);
         self.next_unique_id += 1;

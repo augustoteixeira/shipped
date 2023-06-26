@@ -30,9 +30,13 @@ pub enum MovementType {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct Materials {
+    #[serde(rename = "c")]
     pub carbon: usize,
+    #[serde(rename = "s")]
     pub silicon: usize,
+    #[serde(rename = "p")]
     pub plutonium: usize,
+    #[serde(rename = "c")]
     pub copper: usize,
 }
 
