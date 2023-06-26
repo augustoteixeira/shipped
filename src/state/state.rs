@@ -56,7 +56,7 @@ pub struct SerialState {
 
 pub struct State {
     pub codes: [Code; NUM_CODES],
-    pub entities: HashMap<Id, Box<FullEntity>>,
+    pub entities: HashMap<Id, FullEntity>,
     pub blue_templates: [FullEntity; NUM_SUB_ENTITIES],
     pub red_templates: [FullEntity; NUM_SUB_ENTITIES],
     pub tiles: [Tile; WIDTH * HEIGHT],
@@ -97,7 +97,7 @@ impl State {
     pub fn get_mut_entity(
         &mut self,
         pos: Pos,
-    ) -> Result<&mut Box<FullEntity>, StateError> {
+    ) -> Result<&mut FullEntity, StateError> {
         let id = self
             .get_tile(pos)
             .entity_id
@@ -175,13 +175,6 @@ impl State {
         }
         Ok(())
     }
-    //         Event::Shoot(a) => {
-    //             if let Some(entity) = state.tiles[a.destination.to_index()].entity {
-    //                 if entity.max_hp <= a.damage {
-    //                     //state.entities[e]
-    //                 }
-    //             }
-    //         }
 }
 
 // SEND TO ANOTHER FILE
@@ -236,9 +229,14 @@ pub enum UpdateError {
         to: Pos,
         load: Materials,
     },
+    #[snafu(display("Attacking: {attack:?}"))]
+    AttackUnit { source: StateError, attack: Attack },
 }
 
-pub fn update(state: &mut State, event: Event) -> Result<(), UpdateError> {
+// replay does not try to check logic (like fov). Only the basic necesary
+// for its continued good behavior. the other logic was tested during the
+// generation of the logs.
+pub fn replay(state: &mut State, event: Event) -> Result<(), UpdateError> {
     match event {
         Event::EntityMove(from, to) => {
             state
@@ -263,14 +261,16 @@ pub fn update(state: &mut State, event: Event) -> Result<(), UpdateError> {
                 },
             )?;
         }
-        //         Event::Shoot(a) => {
-        //             if let Some(entity) = state.tiles[a.destination.to_index()].entity {
-        //                 if entity.max_hp <= a.damage {
-        //                     //state.entities[e]
-        //                 }
-        //             }
-        //         }
-        //         Event::Drill(_a) => {}
+        Event::Shoot(a) => {
+            state
+                .attack(a.destination, a.damage)
+                .context(AttackUnitSnafu { attack: a })?;
+        }
+        Event::Drill(a) => {
+            state
+                .attack(a.destination, a.damage)
+                .context(AttackUnitSnafu { attack: a })?;
+        }
         //         Event::Construct(_c) => {}
         //         Event::Message(_m)
         _ => {}
