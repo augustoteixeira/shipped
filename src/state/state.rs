@@ -2,7 +2,7 @@ use snafu::prelude::*;
 use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_SUB_ENTITIES, WIDTH};
-use super::entity::{Code, FullEntity, Materials};
+use super::entity::{Code, FullEntity, Materials, Message, Pos};
 
 // https://wowpedia.fandom.com/wiki/Warcraft:_Orcs_%26_Humans_missions?file=WarCraft-Orcs%26amp%3BHumans-Orcs-Scenario9-SouthernElwynnForest.png
 
@@ -15,19 +15,7 @@ use super::entity::{Code, FullEntity, Materials};
 
 // pub type Geography = [Terrain; WIDTH * HEIGHT];
 
-#[derive(Debug, Snafu, PartialEq, Clone, Copy)]
-pub struct Pos {
-    x: usize,
-    y: usize,
-}
-
-impl Pos {
-    fn to_index(&self) -> usize {
-        self.x + self.y * WIDTH
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum Team {
     Blue,
     Gray,
@@ -46,20 +34,14 @@ pub struct Tile {
     pub entity_id: Option<Id>,
 }
 
-pub struct SerialState {
-    pub codes: [Code; NUM_CODES],
-    pub entities: Vec<FullEntity>,
-    pub blue_templates: [FullEntity; NUM_SUB_ENTITIES],
-    pub red_templates: [FullEntity; NUM_SUB_ENTITIES],
-    pub tiles: [SerialTile; WIDTH * HEIGHT],
-}
-
 pub struct State {
     pub codes: [Code; NUM_CODES],
-    pub entities: HashMap<Id, FullEntity>,
-    pub blue_templates: [FullEntity; NUM_SUB_ENTITIES],
-    pub red_templates: [FullEntity; NUM_SUB_ENTITIES],
-    pub tiles: [Tile; WIDTH * HEIGHT],
+    entities: HashMap<Id, FullEntity>,
+    next_unique_id: usize,
+    blue_templates: [FullEntity; NUM_SUB_ENTITIES],
+    gray_templates: [FullEntity; NUM_SUB_ENTITIES],
+    red_templates: [FullEntity; NUM_SUB_ENTITIES],
+    tiles: [Tile; WIDTH * HEIGHT],
 }
 
 #[derive(Debug, Snafu)]
@@ -74,6 +56,10 @@ pub enum StateError {
     NoSpace { pos: Pos, load: Materials },
     #[snafu(display("Entity at {pos:?} does not have {load:?}"))]
     NoMaterialEntity { pos: Pos, load: Materials },
+    #[snafu(display("Template index out of bounds {template}"))]
+    TemplateOutOfBounds { template: usize },
+    #[snafu(display("Entity in {pos} has no abilities"))]
+    NoAbilities { pos: Pos },
 }
 
 impl State {
@@ -85,6 +71,27 @@ impl State {
     }
     pub fn get_floor_mat(&self, pos: Pos) -> &Materials {
         &self.tiles[pos.to_index()].materials
+    }
+    pub fn build_entity_from_template(
+        &mut self,
+        team: Team,
+        template: usize,
+        pos: Pos,
+    ) -> Result<(), StateError> {
+        ensure!(!self.has_entity(pos), OccupiedTileSnafu { pos });
+        ensure!(
+            template < NUM_SUB_ENTITIES,
+            TemplateOutOfBoundsSnafu { template }
+        );
+        let mut entity = match team {
+            Team::Blue => self.blue_templates[template].clone(),
+            Team::Gray => self.gray_templates[template].clone(),
+            Team::Red => self.red_templates[template].clone(),
+        };
+        entity.pos = pos;
+        self.entities.insert(self.next_unique_id, entity);
+        self.next_unique_id += 1;
+        Ok(())
     }
     pub fn remove_entity(&mut self, pos: Pos) -> Result<(), StateError> {
         let id = self.tiles[pos.to_index()]
@@ -112,6 +119,8 @@ impl State {
         ensure!(self.has_entity(from), EmptyTileSnafu { pos: from });
         ensure!(!self.has_entity(to), OccupiedTileSnafu { pos: to });
         let id = self.tiles[from.to_index()].entity_id.unwrap();
+        let entity = self.get_mut_entity(from).unwrap();
+        entity.pos = to;
         self.tiles[from.to_index()].entity_id = None;
         self.tiles[to.to_index()].entity_id = Some(id);
         Ok(())
@@ -166,7 +175,6 @@ impl State {
         pos: Pos,
         damage: usize,
     ) -> Result<(), StateError> {
-        ensure!(self.has_entity(pos), EmptyTileSnafu { pos });
         let entity = self.get_mut_entity(pos)?;
         if entity.hp > damage {
             entity.hp -= damage;
@@ -175,12 +183,22 @@ impl State {
         }
         Ok(())
     }
+    pub fn set_message(
+        &mut self,
+        pos: Pos,
+        message: &Message,
+    ) -> Result<(), StateError> {
+        let entity = self.get_mut_entity(pos)?;
+        let abilities = entity
+            .abilities
+            .as_mut()
+            .ok_or(StateError::NoAbilities { pos })?;
+        abilities.brain.message = message.clone();
+        Ok(())
+    }
 }
 
 // SEND TO ANOTHER FILE
-
-#[derive(Debug)]
-pub struct Message {}
 
 #[derive(Debug)]
 pub enum Event {
@@ -190,7 +208,7 @@ pub enum Event {
     Shoot(Attack),
     Drill(Attack),
     Construct(Construct),
-    //Message(Pos, Team, ?!?)
+    SendMessage(Pos, Message),
 }
 
 #[derive(Debug)]
@@ -200,9 +218,10 @@ pub struct Attack {
     pub damage: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Construct {
     pub team: Team,
+    pub template_index: usize,
     pub builder: Pos,
     pub buildee: Pos,
 }
@@ -231,6 +250,17 @@ pub enum UpdateError {
     },
     #[snafu(display("Attacking: {attack:?}"))]
     AttackUnit { source: StateError, attack: Attack },
+    #[snafu(display("Construct: {construct:?}"))]
+    ConstructError {
+        source: StateError,
+        construct: Construct,
+    },
+    #[snafu(display("Set message error {} in {:?}", message.emotion, message.pos))]
+    SetMessageError {
+        source: StateError,
+        pos: Pos,
+        message: Message,
+    },
 }
 
 // replay does not try to check logic (like fov). Only the basic necesary
@@ -271,9 +301,19 @@ pub fn replay(state: &mut State, event: Event) -> Result<(), UpdateError> {
                 .attack(a.destination, a.damage)
                 .context(AttackUnitSnafu { attack: a })?;
         }
-        //         Event::Construct(_c) => {}
-        //         Event::Message(_m)
-        _ => {}
+        Event::Construct(c) => {
+            state
+                .build_entity_from_template(c.team, c.template_index, c.buildee)
+                .context(ConstructSnafu {
+                    construct: c.clone(),
+                })?;
+        }
+        Event::SendMessage(pos, message) => {
+            state.set_message(pos, &message).context(SetMessageSnafu {
+                pos,
+                message: message.clone(),
+            })?
+        }
     }
     Ok(())
 }

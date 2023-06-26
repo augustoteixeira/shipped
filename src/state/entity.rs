@@ -1,9 +1,26 @@
-use super::constants::NUM_SUB_ENTITIES;
+use snafu::prelude::*;
+
+use super::constants::{NUM_SUB_ENTITIES, WIDTH};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Snafu, PartialEq, Clone, Copy)]
+pub struct Pos {
+    x: usize,
+    y: usize,
+}
+
+impl Pos {
+    pub fn new(x: usize, y: usize) -> Self {
+        Pos { x, y }
+    }
+    pub fn to_index(&self) -> usize {
+        self.x + self.y * WIDTH
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum MovementType {
     Still,
     Walk,
@@ -104,8 +121,9 @@ impl Materials {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Entity<T> {
+    pub pos: Pos,
     pub hp: usize,
     pub max_hp: usize,
     pub inventory_size: usize,
@@ -113,7 +131,7 @@ pub struct Entity<T> {
     pub abilities: Option<Abilities<T>>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Abilities<T> {
     pub movement_type: MovementType,
     pub drill_damage: usize,
@@ -125,9 +143,16 @@ pub type Half = [Option<u8>; NUM_SUB_ENTITIES];
 
 pub type Code = Vec<u8>;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Message {
+    pub emotion: usize,
+    pub pos: Pos,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Full {
     pub half: Half,
+    pub message: Message,
     pub code_index: usize,
     pub gas: usize,
 }

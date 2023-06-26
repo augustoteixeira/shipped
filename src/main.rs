@@ -1,5 +1,5 @@
 use crate::state::entity::{
-    Abilities, Full, FullEntity, Materials, MovementType,
+    Abilities, Full, FullEntity, Materials, Message, MovementType, Pos,
 };
 
 pub mod state;
@@ -7,6 +7,7 @@ pub mod state;
 fn main() {
     println!("Hello, world!");
     let entity = FullEntity {
+        pos: Pos::new(0, 0),
         hp: 3,
         max_hp: 3,
         inventory_size: 4,
@@ -22,6 +23,10 @@ fn main() {
             gun_damage: Some(1),
             brain: Full {
                 half: [None, None, None, None],
+                message: Message {
+                    emotion: 0,
+                    pos: Pos::new(0, 0),
+                },
                 code_index: 2,
                 gas: 2000,
             },
