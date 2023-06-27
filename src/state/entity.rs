@@ -22,7 +22,7 @@ impl Pos {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MovementType {
     Still,
     Walk,
@@ -154,7 +154,7 @@ pub struct Entity<T> {
 pub struct Abilities<T> {
     pub movement_type: MovementType,
     pub drill_damage: usize,
-    pub gun_damage: Option<usize>,
+    pub gun_damage: usize,
     pub brain: T,
 }
 
@@ -198,9 +198,7 @@ pub fn cost(body: FullEntity) -> Materials {
             MovementType::Walk => result.plutonium += w,
         }
         result.plutonium += a.drill_damage;
-        if let Some(d) = a.gun_damage {
-            result.plutonium += d * d;
-        }
+        result.plutonium += a.gun_damage * a.gun_damage;
         result.plutonium += a.brain.gas / 10 + 1;
     }
     result

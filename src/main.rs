@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use crate::state::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{
-    Abilities, Code, Full, FullEntity, Materials, Message, MovementType, Pos,
+    Abilities, Full, FullEntity, Materials, Message, MovementType, Pos,
 };
 use crate::state::state::{State, Tile};
 
