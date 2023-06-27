@@ -132,6 +132,13 @@ impl State {
             .ok_or(StateError::EmptyTile { pos: pos })?;
         Ok(self.entities.get(&id).unwrap())
     }
+    pub fn get_entity_option(&self, pos: Pos) -> Option<&FullEntity> {
+        let id = self.get_tile(pos).entity_id;
+        match id {
+            None => None,
+            Some(i) => Some(self.entities.get(&i).unwrap()),
+        }
+    }
     pub fn get_mut_entity(
         &mut self,
         pos: Pos,

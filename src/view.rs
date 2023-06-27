@@ -23,6 +23,49 @@ fn window_conf() -> Conf {
     }
 }
 
+//    #[rustfmt::skip]
+fn get_texture(e: &FullEntity) -> usize {
+    let inventory = e.inventory_size;
+    let mut abilities = false;
+    let mut can_walk = false;
+    let mut can_drill = false;
+    let mut can_shoot = false;
+    if let Some(a) = &e.abilities {
+        abilities = true;
+        can_walk = a.movement_type == MovementType::Walk;
+        can_drill = a.drill_damage > 0;
+        can_shoot = a.gun_damage > 0;
+    }
+
+    match (inventory, abilities, can_walk, can_drill, can_shoot) {
+        (0, false, false, false, false) => 0,
+        (_, false, false, false, false) => 1,
+        (_, true, false, false, false) => 2,
+        (_, true, false, true, false) => 3,
+        (_, true, false, _, true) => 4,
+        (_, true, true, false, false) => 5,
+        (_, true, true, true, false) => 6,
+        (_, true, true, _, true) => 7,
+        _ => unreachable! {},
+    }
+}
+
+async fn draw_tile(
+    entity: Option<&FullEntity>,
+    i: usize,
+    j: usize,
+    texture_vec: &Vec<Texture2D>,
+) {
+    if let Some(e) = entity {
+        draw_texture(
+            texture_vec[get_texture(&e)],
+            HOR_DISPLACE + (i as f32) * 16.,
+            VER_DISPLACE + (j as f32) * 16.,
+            WHITE,
+        );
+    }
+}
+
 #[macroquad::main(window_conf)]
 async fn main() -> std::io::Result<()> {
     let mut texture_vec = vec![];
@@ -68,50 +111,14 @@ async fn main() -> std::io::Result<()> {
     let state: State = serde_json::from_str(&contents).unwrap();
     //let entity = state.entities.get(&1).unwrap();
 
-    #[rustfmt::skip]
-    let get_texture = |e: &FullEntity| {
-        let inventory = e.inventory_size;
-        let mut abilities = false;
-        let mut can_walk = false;
-        let mut can_drill = false;
-        let mut can_shoot = false;
-        if let Some(a) = &e.abilities {
-            abilities = true;
-            can_walk = a.movement_type == MovementType::Walk;
-            can_drill = a.drill_damage > 0;
-            can_shoot = a.gun_damage > 0;
-        }
-
-        match (
-        inventory, abilities, can_walk, can_drill, can_shoot,
-    ) {
-        (0, false, false, false, false) => 0,
-        (_, false, false, false, false) => 1,
-        (_, true,  false, false, false) => 2,
-        (_, true,  false, true,  false) => 3,
-        (_, true,  false, _,     true)  => 4,
-        (_, true,  true,  false, false) => 5,
-        (_, true,  true,  true,  false) => 6,
-        (_, true,  true,  _,     true)  => 7,
-        _ => unreachable!{}
-        }
-    };
-
     loop {
         clear_background(LIGHTGRAY);
         let mut pos: Pos;
         for i in 0..WIDTH {
             for j in 0..HEIGHT {
                 pos = Pos::new(i, j);
-                draw_texture(
-                    texture_vec[match state.get_entity(pos) {
-                        Ok(e) => get_texture(&e),
-                        Err(_) => 0,
-                    }],
-                    HOR_DISPLACE + (i as f32) * 16.,
-                    VER_DISPLACE + (j as f32) * 16.,
-                    WHITE,
-                );
+                draw_tile(state.get_entity_option(pos), i, j, &texture_vec)
+                    .await;
             }
         }
 
