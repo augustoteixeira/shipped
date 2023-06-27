@@ -226,7 +226,7 @@ impl State {
     pub fn set_message(
         &mut self,
         pos: Pos,
-        message: &Message,
+        message: Option<Message>,
     ) -> Result<(), StateError> {
         let entity = self.get_mut_entity(pos)?;
         let abilities = entity
