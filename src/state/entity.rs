@@ -36,7 +36,7 @@ pub struct Materials {
     pub silicon: usize,
     #[serde(rename = "p")]
     pub plutonium: usize,
-    #[serde(rename = "c")]
+    #[serde(rename = "o")]
     pub copper: usize,
 }
 

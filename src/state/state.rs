@@ -42,7 +42,7 @@ pub struct State {
     gray_templates: [Option<FullEntity>; NUM_TEMPLATES],
     red_templates: [Option<FullEntity>; NUM_TEMPLATES],
     #[serde_as(as = "[_; WIDTH * HEIGHT]")]
-    tiles: [Tile; WIDTH * HEIGHT],
+    pub tiles: [Tile; WIDTH * HEIGHT],
 }
 
 #[derive(Debug, Snafu)]
@@ -113,6 +113,7 @@ impl State {
         .ok_or(StateError::NoTemplate { team, template })?;
         entity.pos = pos;
         self.entities.insert(self.next_unique_id, entity);
+        self.tiles[pos.to_index()].entity_id = Some(self.next_unique_id);
         self.next_unique_id += 1;
         Ok(())
     }
@@ -123,6 +124,13 @@ impl State {
         self.entities.remove(&id);
         self.tiles[pos.to_index()].entity_id = None;
         Ok(())
+    }
+    pub fn get_entity(&self, pos: Pos) -> Result<&FullEntity, StateError> {
+        let id = self
+            .get_tile(pos)
+            .entity_id
+            .ok_or(StateError::EmptyTile { pos: pos })?;
+        Ok(self.entities.get(&id).unwrap())
     }
     pub fn get_mut_entity(
         &mut self,

@@ -1,3 +1,6 @@
+use std::fs::File;
+use std::io::prelude::*;
+
 use macroquad::prelude::*;
 
 pub mod state;
@@ -6,6 +9,7 @@ use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::{
     Abilities, Full, FullEntity, Materials, Message, MovementType, Pos,
 };
+use crate::state::state::State;
 
 const HOR_DISPLACE: f32 = 150.;
 const VER_DISPLACE: f32 = 25.;
@@ -20,7 +24,7 @@ fn window_conf() -> Conf {
 }
 
 #[macroquad::main(window_conf)]
-async fn main() {
+async fn main() -> std::io::Result<()> {
     let mut texture_vec = vec![];
     texture_vec.push(load_texture("assets/wall.png").await.unwrap());
     texture_vec.push(load_texture("assets/crate.png").await.unwrap());
@@ -31,32 +35,38 @@ async fn main() {
     texture_vec.push(load_texture("assets/drill_tank.png").await.unwrap());
     texture_vec.push(load_texture("assets/gun_tank.png").await.unwrap());
 
-    let entity = FullEntity {
-        pos: Pos::new(0, 0),
-        hp: 3,
-        max_hp: 3,
-        inventory_size: 4,
-        materials: Materials {
-            carbon: 0,
-            silicon: 1,
-            plutonium: 23,
-            copper: 5235,
-        },
-        abilities: Some(Abilities {
-            movement_type: MovementType::Still,
-            drill_damage: 2,
-            gun_damage: 1,
-            brain: Full {
-                half: [None, None, None, None],
-                message: Message {
-                    emotion: 0,
-                    pos: Pos::new(0, 0),
-                },
-                code_index: 2,
-                gas: 2000,
-            },
-        }),
-    };
+    // let entity = FullEntity {
+    //     pos: Pos::new(0, 0),
+    //     hp: 3,
+    //     max_hp: 3,
+    //     inventory_size: 4,
+    //     materials: Materials {
+    //         carbon: 0,
+    //         silicon: 1,
+    //         plutonium: 23,
+    //         copper: 5235,
+    //     },
+    //     abilities: Some(Abilities {
+    //         movement_type: MovementType::Still,
+    //         drill_damage: 2,
+    //         gun_damage: 1,
+    //         brain: Full {
+    //             half: [None, None, None, None],
+    //             message: Message {
+    //                 emotion: 0,
+    //                 pos: Pos::new(0, 0),
+    //             },
+    //             code_index: 2,
+    //             gas: 2000,
+    //         },
+    //     }),
+    // };
+
+    let mut file = File::open("serialized/state_v1.json")?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+    let state: State = serde_json::from_str(&contents).unwrap();
+    //let entity = state.entities.get(&1).unwrap();
 
     #[rustfmt::skip]
     let get_texture = |e: &FullEntity| {
@@ -89,10 +99,15 @@ async fn main() {
 
     loop {
         clear_background(LIGHTGRAY);
+        let mut pos: Pos;
         for i in 0..WIDTH {
             for j in 0..HEIGHT {
+                pos = Pos::new(i, j);
                 draw_texture(
-                    texture_vec[get_texture(&entity)],
+                    texture_vec[match state.get_entity(pos) {
+                        Ok(e) => get_texture(&e),
+                        Err(_) => 0,
+                    }],
                     HOR_DISPLACE + (i as f32) * 16.,
                     VER_DISPLACE + (j as f32) * 16.,
                     WHITE,
@@ -106,4 +121,5 @@ async fn main() {
 
         next_frame().await
     }
+    Ok(())
 }

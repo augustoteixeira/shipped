@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use crate::state::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
+use crate::state::constants::NUM_TEMPLATES;
 use crate::state::entity::{
     Abilities, Full, FullEntity, Materials, Message, MovementType, Pos,
 };
-use crate::state::state::{State, Tile};
+use crate::state::state::{State, Team, Tile};
 
 pub mod state;
 
@@ -23,7 +23,7 @@ fn main() {
         abilities: Some(Abilities {
             movement_type: MovementType::Still,
             drill_damage: 2,
-            gun_damage: Some(1),
+            gun_damage: 1,
             brain: Full {
                 half: [None, None, None, None],
                 message: Message {
@@ -35,13 +35,13 @@ fn main() {
             },
         }),
     };
-    let mut entities = HashMap::new();
-    entities.insert(1, entity.clone());
+    //let entities =
+    //entities.insert(1, entity.clone());
     let template: [Option<FullEntity>; NUM_TEMPLATES] =
-        std::array::from_fn(|_| None);
-    let state = State::new(
+        std::array::from_fn(|_| Some(entity.clone()));
+    let mut state = State::new(
         std::array::from_fn(|_| None),
-        entities,
+        HashMap::new(),
         template.clone(),
         template.clone(),
         template.clone(),
@@ -50,6 +50,11 @@ fn main() {
             materials: Materials::new(0, 1, 2, 3),
         }),
     );
+    state
+        .build_entity_from_template(Team::Blue, 0, Pos::new(0, 0))
+        .unwrap();
+    //let serialized_entity = serde_json::to_string(&entity).unwrap();
+    //println!("{}", serialized_entity);
     let serialized = serde_json::to_string(&state).unwrap();
-    println!("Serialized = {}", serialized);
+    println!("{}", serialized);
 }
