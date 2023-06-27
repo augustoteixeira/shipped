@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
-use crate::state::constants::NUM_TEMPLATES;
+use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{
     Abilities, Full, FullEntity, Materials, Message, MovementType, Pos,
 };
+use crate::state::replay::{Event, Frame, Script};
 use crate::state::state::{State, Team, Tile};
 
 pub mod state;
@@ -45,16 +46,25 @@ fn main() {
         template.clone(),
         template.clone(),
         template.clone(),
-        std::array::from_fn(|_| Tile {
-            entity_id: None,
-            materials: Materials::new(0, 1, 2, 3),
-        }),
+        (0..(WIDTH * HEIGHT))
+            .map(|_| Tile {
+                entity_id: None,
+                materials: Materials::new(0, 1, 2, 3),
+            })
+            .collect(),
     );
     state
         .build_entity_from_template(Team::Blue, 0, Pos::new(0, 0))
         .unwrap();
-    //let serialized_entity = serde_json::to_string(&entity).unwrap();
-    //println!("{}", serialized_entity);
-    let serialized = serde_json::to_string(&state).unwrap();
+    state
+        .build_entity_from_template(Team::Blue, 0, Pos::new(1, 1))
+        .unwrap();
+
+    let frame: Frame = vec![Event::EntityMove(Pos::new(0, 0), Pos::new(0, 1))];
+    let script: Script = Script {
+        genesis: state,
+        frames: vec![frame],
+    };
+    let serialized = serde_json::to_string(&script).unwrap();
     println!("{}", serialized);
 }

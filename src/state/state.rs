@@ -32,7 +32,7 @@ pub struct Tile {
 
 //pub struct Tiles<T, const N: usize>(pub [T; WIDTH * HEIGHT]);
 //pub struct Tiles<const N: usize>(pub [Tile; WIDTH * HEIGHT]);
-#[serde_with::serde_as]
+//#[serde_with::serde_as]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct State {
     codes: [Option<Code>; NUM_CODES],
@@ -41,8 +41,9 @@ pub struct State {
     blue_templates: [Option<FullEntity>; NUM_TEMPLATES],
     gray_templates: [Option<FullEntity>; NUM_TEMPLATES],
     red_templates: [Option<FullEntity>; NUM_TEMPLATES],
-    #[serde_as(as = "[_; WIDTH * HEIGHT]")]
-    pub tiles: [Tile; WIDTH * HEIGHT],
+    //#[serde_as(as = "[_; WIDTH * HEIGHT]")]
+    //pub tiles: [Tile; WIDTH * HEIGHT],
+    pub tiles: Vec<Tile>,
 }
 
 #[derive(Debug, Snafu)]
@@ -72,8 +73,9 @@ impl State {
         blue_templates: [Option<FullEntity>; NUM_TEMPLATES],
         gray_templates: [Option<FullEntity>; NUM_TEMPLATES],
         red_templates: [Option<FullEntity>; NUM_TEMPLATES],
-        tiles: [Tile; WIDTH * HEIGHT],
+        tiles: Vec<Tile>,
     ) -> Self {
+        assert!(tiles.len() == WIDTH * HEIGHT);
         let next_unique_id = entities.iter().fold(0, |a, (id, _)| max(a, *id));
         State {
             codes,

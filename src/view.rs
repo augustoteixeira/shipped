@@ -6,9 +6,8 @@ use macroquad::prelude::*;
 pub mod state;
 
 use crate::state::constants::{HEIGHT, WIDTH};
-use crate::state::entity::{
-    Abilities, Full, FullEntity, Materials, Message, MovementType, Pos,
-};
+use crate::state::entity::{FullEntity, MovementType, Pos};
+use crate::state::replay::{replay_event, Script};
 use crate::state::state::State;
 
 const HOR_DISPLACE: f32 = 150.;
@@ -23,7 +22,6 @@ fn window_conf() -> Conf {
     }
 }
 
-//    #[rustfmt::skip]
 fn get_texture(e: &FullEntity) -> usize {
     let inventory = e.inventory_size;
     let mut abilities = false;
@@ -66,6 +64,16 @@ async fn draw_tile(
     }
 }
 
+async fn draw_map(state: &State, texture_vec: &Vec<Texture2D>) {
+    let mut pos: Pos;
+    for i in 0..WIDTH {
+        for j in 0..HEIGHT {
+            pos = Pos::new(i, j);
+            draw_tile(state.get_entity_option(pos), i, j, &texture_vec).await;
+        }
+    }
+}
+
 #[macroquad::main(window_conf)]
 async fn main() -> std::io::Result<()> {
     let mut texture_vec = vec![];
@@ -78,55 +86,40 @@ async fn main() -> std::io::Result<()> {
     texture_vec.push(load_texture("assets/drill_tank.png").await.unwrap());
     texture_vec.push(load_texture("assets/gun_tank.png").await.unwrap());
 
-    // let entity = FullEntity {
-    //     pos: Pos::new(0, 0),
-    //     hp: 3,
-    //     max_hp: 3,
-    //     inventory_size: 4,
-    //     materials: Materials {
-    //         carbon: 0,
-    //         silicon: 1,
-    //         plutonium: 23,
-    //         copper: 5235,
-    //     },
-    //     abilities: Some(Abilities {
-    //         movement_type: MovementType::Still,
-    //         drill_damage: 2,
-    //         gun_damage: 1,
-    //         brain: Full {
-    //             half: [None, None, None, None],
-    //             message: Message {
-    //                 emotion: 0,
-    //                 pos: Pos::new(0, 0),
-    //             },
-    //             code_index: 2,
-    //             gas: 2000,
-    //         },
-    //     }),
-    // };
-
-    let mut file = File::open("serialized/state_v1.json")?;
+    println!("Bla");
+    let mut file = File::open("serialized/script_v1.json")?;
+    println!("Ble");
     let mut contents = String::new();
+    println!("Bli");
     file.read_to_string(&mut contents)?;
-    let state: State = serde_json::from_str(&contents).unwrap();
+    println!("Blo");
+
+    // let mut deserializer = serde_json::Deserializer::from_str(&contents);
+    // deserializer.disable_recursion_limit();
+    // let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
+
+    let script: Script = serde_json::from_str(&contents).unwrap();
+
+    println!("Blu");
+    let mut state = script.genesis;
+    println!("Bls");
     //let entity = state.entities.get(&1).unwrap();
+
+    let mut seconds = get_time();
 
     loop {
         clear_background(LIGHTGRAY);
-        let mut pos: Pos;
-        for i in 0..WIDTH {
-            for j in 0..HEIGHT {
-                pos = Pos::new(i, j);
-                draw_tile(state.get_entity_option(pos), i, j, &texture_vec)
-                    .await;
-            }
-        }
-
+        draw_map(&state, &texture_vec).await;
         if is_key_pressed(KeyCode::Escape) | is_key_pressed(KeyCode::Q) {
             break;
         }
 
-        next_frame().await
+        if get_time() > seconds + 1. {
+            seconds += 1.;
+            println!("{:?}", script.frames[0][0].clone());
+            replay_event(&mut state, script.frames[0][0].clone()).unwrap();
+        }
+        next_frame().await;
     }
     Ok(())
 }

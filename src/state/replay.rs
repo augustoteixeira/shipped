@@ -4,7 +4,7 @@ use snafu::prelude::*;
 use super::entity::{Materials, Message, Pos};
 use super::state::{State, StateError, Team};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Event {
     EntityMove(Pos, Pos),
     AssetsFloorToEntity(Materials, Pos, Pos),
@@ -15,7 +15,7 @@ pub enum Event {
     SendMessage(Pos, Message),
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Attack {
     pub origin: Pos,
     pub destination: Pos,
