@@ -12,6 +12,7 @@ use crate::state::state::State;
 
 const HOR_DISPLACE: f32 = 150.;
 const VER_DISPLACE: f32 = 25.;
+const FRAME_TIME: f64 = 1.;
 
 fn window_conf() -> Conf {
     Conf {
@@ -57,8 +58,8 @@ async fn draw_tile(
     if let Some(e) = entity {
         draw_texture(
             texture_vec[get_texture(&e)],
-            HOR_DISPLACE + (i as f32) * 16.,
-            VER_DISPLACE + (j as f32) * 16.,
+            HOR_DISPLACE + (j as f32) * 16.,
+            VER_DISPLACE + (i as f32) * 16.,
             WHITE,
         );
     }
@@ -86,26 +87,16 @@ async fn main() -> std::io::Result<()> {
     texture_vec.push(load_texture("assets/drill_tank.png").await.unwrap());
     texture_vec.push(load_texture("assets/gun_tank.png").await.unwrap());
 
-    println!("Bla");
     let mut file = File::open("serialized/script_v1.json")?;
-    println!("Ble");
     let mut contents = String::new();
-    println!("Bli");
     file.read_to_string(&mut contents)?;
-    println!("Blo");
-
-    // let mut deserializer = serde_json::Deserializer::from_str(&contents);
-    // deserializer.disable_recursion_limit();
-    // let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
-
     let script: Script = serde_json::from_str(&contents).unwrap();
 
-    println!("Blu");
     let mut state = script.genesis;
-    println!("Bls");
-    //let entity = state.entities.get(&1).unwrap();
 
     let mut seconds = get_time();
+    let mut frame_number = 0;
+    let mut finished = false;
 
     loop {
         clear_background(LIGHTGRAY);
@@ -114,11 +105,21 @@ async fn main() -> std::io::Result<()> {
             break;
         }
 
-        if get_time() > seconds + 1. {
-            seconds += 1.;
-            println!("{:?}", script.frames[0][0].clone());
-            replay_event(&mut state, script.frames[0][0].clone()).unwrap();
+        if get_time() > seconds + FRAME_TIME {
+            seconds += FRAME_TIME;
+            let frame = &script.frames.get(frame_number);
+            if let Some(f) = frame {
+                println!("{frame_number}");
+                frame_number += 1;
+                replay_event(&mut state, f[0].clone()).unwrap();
+            } else {
+                finished = true;
+            }
         }
+        if finished {
+            draw_rectangle(10., 10., 40.0, 40.0, RED);
+        }
+
         next_frame().await;
     }
     Ok(())

@@ -9,8 +9,8 @@ pub type Id = usize;
 
 #[derive(Serialize, Deserialize, Debug, Snafu, PartialEq, Clone, Copy)]
 pub struct Pos {
-    x: usize,
-    y: usize,
+    pub x: usize,
+    pub y: usize,
 }
 
 impl Pos {
@@ -162,7 +162,7 @@ pub type Half = [Option<u8>; NUM_SUB_ENTITIES];
 
 pub type Code = Vec<u8>;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct Message {
     pub emotion: usize,
     pub pos: Pos,
@@ -171,7 +171,7 @@ pub struct Message {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Full {
     pub half: Half,
-    pub message: Message,
+    pub message: Option<Message>,
     pub code_index: usize,
     pub gas: usize,
 }

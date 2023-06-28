@@ -12,7 +12,7 @@ pub enum Event {
     Shoot(Attack),
     Drill(Attack),
     Construct(Construct),
-    SendMessage(Pos, Message),
+    SendMessage(Pos, Option<Message>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -59,11 +59,11 @@ pub enum UpdateError {
         source: StateError,
         construct: Construct,
     },
-    #[snafu(display("Set message error {} in {:?}", message.emotion, message.pos))]
+    #[snafu(display("Set message error in {:?}", message))]
     SetMessageError {
         source: StateError,
         pos: Pos,
-        message: Message,
+        message: Option<Message>,
     },
 }
 
@@ -116,9 +116,9 @@ pub fn replay_event(
                 })?;
         }
         Event::SendMessage(pos, message) => {
-            state.set_message(pos, &message).context(SetMessageSnafu {
+            state.set_message(pos, message).context(SetMessageSnafu {
                 pos,
-                message: message.clone(),
+                message: message,
             })?
         }
     }
