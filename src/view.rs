@@ -13,7 +13,7 @@ use crate::state::state::State;
 
 const HOR_DISPLACE: f32 = 150.;
 const VER_DISPLACE: f32 = 25.;
-const FRAME_TIME: f64 = 1.;
+const FRAME_TIME: f64 = 0.2;
 
 fn window_conf() -> Conf {
     Conf {
@@ -110,7 +110,6 @@ async fn main() -> std::io::Result<()> {
             seconds += FRAME_TIME;
             let frame = &script.frames.get(frame_number);
             if let Some(f) = frame {
-                println!("{frame_number}");
                 frame_number += 1;
                 for e in f.iter() {
                     replay_event(&mut state, e.clone()).unwrap();

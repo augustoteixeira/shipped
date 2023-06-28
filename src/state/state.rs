@@ -42,8 +42,6 @@ pub struct State {
     blue_templates: [Option<FullEntity>; NUM_TEMPLATES],
     gray_templates: [Option<FullEntity>; NUM_TEMPLATES],
     red_templates: [Option<FullEntity>; NUM_TEMPLATES],
-    //#[serde_as(as = "[_; WIDTH * HEIGHT]")]
-    //pub tiles: [Tile; WIDTH * HEIGHT],
     pub tiles: Vec<Tile>,
 }
 

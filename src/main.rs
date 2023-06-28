@@ -46,6 +46,16 @@ fn random_entity() -> FullEntity {
     }
 }
 
+fn random_direction() -> Verb {
+    match gen_range(0, 4) {
+        0 => Verb::AttemptMove(Displace::new(1, 0)),
+        1 => Verb::AttemptMove(Displace::new(-1, 0)),
+        2 => Verb::AttemptMove(Displace::new(0, 1)),
+        3 => Verb::AttemptMove(Displace::new(0, -1)),
+        _ => unreachable!(),
+    }
+}
+
 fn main() {
     let mut initial_state = State::new(
         std::array::from_fn(|_| None),
@@ -79,7 +89,7 @@ fn main() {
                 &state,
                 Action {
                     entity_id: id,
-                    verb: Verb::AttemptMove(Displace::new(1, 0)),
+                    verb: random_direction(),
                 },
             ) {
                 Ok(Some(e)) => {
