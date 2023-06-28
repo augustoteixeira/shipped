@@ -7,7 +7,7 @@ use crate::state::entity::{
     Abilities, Full, FullEntity, Materials, Message, MovementType,
 };
 use crate::state::geometry::{Displace, Pos};
-use crate::state::replay::{Event, Frame, Script};
+use crate::state::replay::{replay_event, Frame, Script};
 use crate::state::state::{State, Team, Tile};
 
 pub mod state;
@@ -47,7 +47,7 @@ fn random_entity() -> FullEntity {
 }
 
 fn main() {
-    let mut state = State::new(
+    let mut initial_state = State::new(
         std::array::from_fn(|_| None),
         HashMap::new(),
         std::array::from_fn(|_| Some(random_entity())),
@@ -60,25 +60,35 @@ fn main() {
             })
             .collect(),
     );
-    for i in 0..20 {
-        let _ = state.build_entity_from_template(
+    for _ in 0..2 {
+        let _ = initial_state.build_entity_from_template(
             Team::Blue,
             gen_range(0, NUM_TEMPLATES),
             Pos::new(gen_range(0, WIDTH), gen_range(0, HEIGHT)),
         );
     }
+    let mut state = initial_state.clone();
     let mut frames: Vec<Frame> = vec![];
-    for f in 1..20 {
+    for _ in 1..20 {
         let mut frame = vec![];
-        for (id, e) in state.entities.iter() {
-            if let Ok(event) = implement_action(
+        let id_vec = state.get_entities_ids();
+        for id in id_vec {
+            let entity = state.get_entity_by_id(id).unwrap();
+            eprintln!("Entity {} at {:?}", id, entity.pos);
+            match implement_action(
                 &state,
                 Action {
-                    entity_id: *id,
+                    entity_id: id,
                     verb: Verb::AttemptMove(Displace::new(1, 0)),
                 },
             ) {
-                frame.push(event);
+                Ok(Some(e)) => {
+                    eprintln!("Event {:?}", e.clone());
+                    frame.push(e.clone());
+                    replay_event(&mut state, e).unwrap();
+                }
+                Ok(None) => {}
+                Err(e) => eprintln! {"Error {:}", e},
             }
 
             // let pos = Pos::new(gen_range(1, 59), gen_range(1, 59));
@@ -90,7 +100,7 @@ fn main() {
         frames.push(frame);
     }
     let script: Script = Script {
-        genesis: state,
+        genesis: initial_state,
         frames,
     };
     let serialized = serde_json::to_string(&script).unwrap();

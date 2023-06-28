@@ -25,7 +25,7 @@ pub enum Team {
     Red,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Tile {
     pub materials: Materials,
     pub entity_id: Option<Id>,
@@ -34,7 +34,7 @@ pub struct Tile {
 //pub struct Tiles<T, const N: usize>(pub [T; WIDTH * HEIGHT]);
 //pub struct Tiles<const N: usize>(pub [Tile; WIDTH * HEIGHT]);
 //#[serde_with::serde_as]
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct State {
     codes: [Option<Code>; NUM_CODES],
     pub entities: HashMap<Id, FullEntity>,
@@ -158,6 +158,9 @@ impl State {
             .entity_id
             .ok_or(StateError::EmptyTile { pos })?;
         Ok(self.entities.get_mut(&id).unwrap())
+    }
+    pub fn get_entities_ids(&self) -> Vec<Id> {
+        self.entities.keys().map(|x| *x).collect()
     }
     pub fn move_entity(
         &mut self,

@@ -112,7 +112,9 @@ async fn main() -> std::io::Result<()> {
             if let Some(f) = frame {
                 println!("{frame_number}");
                 frame_number += 1;
-                replay_event(&mut state, f[0].clone()).unwrap();
+                for e in f.iter() {
+                    replay_event(&mut state, e.clone()).unwrap();
+                }
             } else {
                 finished = true;
             }

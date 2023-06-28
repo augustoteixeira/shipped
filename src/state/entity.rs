@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
-use snafu::prelude::*;
 use std::cmp::Ordering;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
-use super::constants::{NUM_SUB_ENTITIES, WIDTH};
+use super::constants::NUM_SUB_ENTITIES;
 use super::geometry::Pos;
 
 pub type Id = usize;
