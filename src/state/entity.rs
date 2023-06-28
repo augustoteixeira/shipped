@@ -1,26 +1,12 @@
-use snafu::prelude::*;
-
-use super::constants::{NUM_SUB_ENTITIES, WIDTH};
 use serde::{Deserialize, Serialize};
+use snafu::prelude::*;
 use std::cmp::Ordering;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
+use super::constants::{NUM_SUB_ENTITIES, WIDTH};
+use super::geometry::Pos;
+
 pub type Id = usize;
-
-#[derive(Serialize, Deserialize, Debug, Snafu, PartialEq, Clone, Copy)]
-pub struct Pos {
-    pub x: usize,
-    pub y: usize,
-}
-
-impl Pos {
-    pub fn new(x: usize, y: usize) -> Self {
-        Pos { x, y }
-    }
-    pub fn to_index(&self) -> usize {
-        self.x + self.y * WIDTH
-    }
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MovementType {

@@ -6,7 +6,8 @@ use macroquad::prelude::*;
 pub mod state;
 
 use crate::state::constants::{HEIGHT, WIDTH};
-use crate::state::entity::{FullEntity, MovementType, Pos};
+use crate::state::entity::{FullEntity, MovementType};
+use crate::state::geometry::Pos;
 use crate::state::replay::{replay_event, Script};
 use crate::state::state::State;
 

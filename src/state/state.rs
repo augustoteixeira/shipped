@@ -4,7 +4,8 @@ use std::cmp::max;
 use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
-use super::entity::{Code, FullEntity, Id, Materials, Message, Pos};
+use super::entity::{Code, FullEntity, Id, Materials, Message};
+use super::geometry::Pos;
 
 // https://wowpedia.fandom.com/wiki/Warcraft:_Orcs_%26_Humans_missions?file=WarCraft-Orcs%26amp%3BHumans-Orcs-Scenario9-SouthernElwynnForest.png
 
@@ -36,7 +37,7 @@ pub struct Tile {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct State {
     codes: [Option<Code>; NUM_CODES],
-    entities: HashMap<Id, FullEntity>,
+    pub entities: HashMap<Id, FullEntity>,
     next_unique_id: usize,
     blue_templates: [Option<FullEntity>; NUM_TEMPLATES],
     gray_templates: [Option<FullEntity>; NUM_TEMPLATES],
@@ -64,6 +65,8 @@ pub enum StateError {
     NoAbilities { pos: Pos },
     #[snafu(display("No entity in {team:?} with template{template}"))]
     NoTemplate { team: Team, template: usize },
+    #[snafu(display("No entity with id {id}"))]
+    NoEntityWithId { id: Id },
 }
 
 impl State {
@@ -122,7 +125,7 @@ impl State {
     pub fn remove_entity(&mut self, pos: Pos) -> Result<(), StateError> {
         let id = self.tiles[pos.to_index()]
             .entity_id
-            .ok_or(StateError::EmptyTile { pos: pos })?;
+            .ok_or(StateError::EmptyTile { pos })?;
         self.entities.remove(&id);
         self.tiles[pos.to_index()].entity_id = None;
         Ok(())
@@ -131,8 +134,13 @@ impl State {
         let id = self
             .get_tile(pos)
             .entity_id
-            .ok_or(StateError::EmptyTile { pos: pos })?;
+            .ok_or(StateError::EmptyTile { pos })?;
         Ok(self.entities.get(&id).unwrap())
+    }
+    pub fn get_entity_by_id(&self, id: Id) -> Result<&FullEntity, StateError> {
+        self.entities
+            .get(&id)
+            .ok_or(StateError::NoEntityWithId { id })
     }
     pub fn get_entity_option(&self, pos: Pos) -> Option<&FullEntity> {
         let id = self.get_tile(pos).entity_id;
@@ -148,7 +156,7 @@ impl State {
         let id = self
             .get_tile(pos)
             .entity_id
-            .ok_or(StateError::EmptyTile { pos: pos })?;
+            .ok_or(StateError::EmptyTile { pos })?;
         Ok(self.entities.get_mut(&id).unwrap())
     }
     pub fn move_entity(

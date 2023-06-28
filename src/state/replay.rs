@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 use snafu::prelude::*;
 
-use super::entity::{Materials, Message, Pos};
+use super::entity::{Materials, Message};
+use super::geometry::Pos;
 use super::state::{State, StateError, Team};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
