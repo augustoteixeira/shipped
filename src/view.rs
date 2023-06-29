@@ -8,7 +8,7 @@ pub mod state;
 use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::{FullEntity, MovementType};
 use crate::state::geometry::Pos;
-use crate::state::replay::{replay_event, Script};
+use crate::state::replay::{implement_effect, Script};
 use crate::state::state::State;
 
 const HOR_DISPLACE: f32 = 150.;
@@ -112,7 +112,7 @@ async fn main() -> std::io::Result<()> {
             if let Some(f) = frame {
                 frame_number += 1;
                 for e in f.iter() {
-                    replay_event(&mut state, e.clone()).unwrap();
+                    implement_effect(&mut state, e.clone()).unwrap();
                 }
             } else {
                 finished = true;

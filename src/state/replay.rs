@@ -6,10 +6,10 @@ use super::geometry::Pos;
 use super::state::{State, StateError, Team};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Event {
+pub enum Effect {
     EntityMove(Pos, Pos),
-    AssetsFloorToEntity(Materials, Pos, Pos),
-    AssetsEntityToFloor(Materials, Pos, Pos),
+    AssetsFloorToEntity { mat: Materials, from: Pos, to: Pos },
+    AssetsEntityToFloor { mat: Materials, from: Pos, to: Pos },
     Shoot(Attack),
     Drill(Attack),
     Construct(Construct),
@@ -71,17 +71,21 @@ pub enum UpdateError {
 // replay does not try to check logic (like fov). Only the basic necesary
 // for its continued good behavior. the other logic was tested during the
 // generation of the logs.
-pub fn replay_event(
+pub fn implement_effect(
     state: &mut State,
-    event: Event,
+    effect: Effect,
 ) -> Result<(), UpdateError> {
-    match event {
-        Event::EntityMove(from, to) => {
+    match effect {
+        Effect::EntityMove(from, to) => {
             state
                 .move_entity(from, to)
                 .context(EntityMoveSnafu { from, to })?;
         }
-        Event::AssetsFloorToEntity(load, from, to) => {
+        Effect::AssetsFloorToEntity {
+            mat: load,
+            from,
+            to,
+        } => {
             state.move_material_to_entity(from, to, &load).context(
                 MaterialMoveToEntitySnafu {
                     from,
@@ -90,7 +94,11 @@ pub fn replay_event(
                 },
             )?;
         }
-        Event::AssetsEntityToFloor(load, from, to) => {
+        Effect::AssetsEntityToFloor {
+            mat: load,
+            from,
+            to,
+        } => {
             state.move_material_to_floor(from, to, &load).context(
                 MaterialMoveToFloorSnafu {
                     from,
@@ -99,24 +107,24 @@ pub fn replay_event(
                 },
             )?;
         }
-        Event::Shoot(a) => {
+        Effect::Shoot(a) => {
             state
                 .attack(a.destination, a.damage)
                 .context(AttackUnitSnafu { attack: a })?;
         }
-        Event::Drill(a) => {
+        Effect::Drill(a) => {
             state
                 .attack(a.destination, a.damage)
                 .context(AttackUnitSnafu { attack: a })?;
         }
-        Event::Construct(c) => {
+        Effect::Construct(c) => {
             state
                 .build_entity_from_template(c.team, c.template_index, c.buildee)
                 .context(ConstructSnafu {
                     construct: c.clone(),
                 })?;
         }
-        Event::SendMessage(pos, message) => {
+        Effect::SendMessage(pos, message) => {
             state.set_message(pos, message).context(SetMessageSnafu {
                 pos,
                 message: message,
@@ -126,7 +134,7 @@ pub fn replay_event(
     Ok(())
 }
 
-pub type Frame = Vec<Event>;
+pub type Frame = Vec<Effect>;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Script {

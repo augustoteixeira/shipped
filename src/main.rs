@@ -1,13 +1,13 @@
 use macroquad::rand::gen_range;
 use std::collections::HashMap;
 
-use crate::state::actions::{implement_action, Action, Verb};
+use crate::state::actions::{validate_command, Command, Verb};
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{
     Abilities, Full, FullEntity, Materials, Message, MovementType,
 };
 use crate::state::geometry::{Displace, Pos};
-use crate::state::replay::{replay_event, Frame, Script};
+use crate::state::replay::{implement_effect, Frame, Script};
 use crate::state::state::{State, Team, Tile};
 
 pub mod state;
@@ -85,17 +85,17 @@ fn main() {
         for id in id_vec {
             let entity = state.get_entity_by_id(id).unwrap();
             eprintln!("Entity {} at {:?}", id, entity.pos);
-            match implement_action(
+            match validate_command(
                 &state,
-                Action {
+                Command {
                     entity_id: id,
                     verb: random_direction(),
                 },
             ) {
                 Ok(Some(e)) => {
-                    eprintln!("Event {:?}", e.clone());
+                    eprintln!("Effect {:?}", e.clone());
                     frame.push(e.clone());
-                    replay_event(&mut state, e).unwrap();
+                    implement_effect(&mut state, e).unwrap();
                 }
                 Ok(None) => {}
                 Err(e) => eprintln! {"Error {:}", e},
@@ -104,7 +104,7 @@ fn main() {
             // let pos = Pos::new(gen_range(1, 59), gen_range(1, 59));
             // let new_pos = Pos::new(pos.x + 1, pos.y);
             // if state.has_entity(pos) & !state.has_entity(new_pos) {
-            //     frame.push(Event::EntityMove(pos, new_pos));
+            //     frame.push(Effect::EntityMove(pos, new_pos));
             //     break;
         }
         frames.push(frame);
