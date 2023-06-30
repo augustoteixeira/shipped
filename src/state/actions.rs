@@ -3,7 +3,8 @@ use snafu::prelude::*;
 
 use super::entity::{Id, Materials, Message};
 use super::geometry::{
-    add_displace, are_neighbors, is_within_bounds, Displace, GeometryError, Pos,
+    add_displace, are_neighbors, is_within_bounds, Direction, Displace,
+    GeometryError, Pos,
 };
 use super::replay::Effect;
 use super::state::{State, StateError};
@@ -17,7 +18,7 @@ pub struct Command {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Verb {
     Wait,
-    AttemptMove(Displace),
+    AttemptMove(Direction),
     GetMaterials(Displace, Materials),
     DropMaterials(Displace, Materials),
     Shoot(Pos),
@@ -55,11 +56,11 @@ pub fn validate_command(
     )?;
     match command.verb {
         Verb::Wait => return Ok(None),
-        Verb::AttemptMove(disp) => {
-            let new_pos =
-                add_displace(entity.pos, &disp).context(DisplaceNegSnafu {
+        Verb::AttemptMove(dir) => {
+            let new_pos = add_displace(entity.pos, &Displace::from(dir))
+                .context(DisplaceNegSnafu {
                     pos: entity.pos,
-                    disp: disp.clone(),
+                    disp: Displace::from(dir.clone()),
                 })?;
             ensure!(
                 is_within_bounds(new_pos),

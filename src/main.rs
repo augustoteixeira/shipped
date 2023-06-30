@@ -6,7 +6,7 @@ use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{
     Abilities, Full, FullEntity, Materials, Message, MovementType,
 };
-use crate::state::geometry::{Displace, Pos};
+use crate::state::geometry::{Direction, Pos};
 use crate::state::replay::{implement_effect, Frame, Script};
 use crate::state::state::{State, Team, Tile};
 
@@ -48,10 +48,10 @@ fn random_entity() -> FullEntity {
 
 fn random_direction() -> Verb {
     match gen_range(0, 4) {
-        0 => Verb::AttemptMove(Displace::new(1, 0)),
-        1 => Verb::AttemptMove(Displace::new(-1, 0)),
-        2 => Verb::AttemptMove(Displace::new(0, 1)),
-        3 => Verb::AttemptMove(Displace::new(0, -1)),
+        0 => Verb::AttemptMove(Direction::North),
+        1 => Verb::AttemptMove(Direction::East),
+        2 => Verb::AttemptMove(Direction::South),
+        3 => Verb::AttemptMove(Direction::West),
         _ => unreachable!(),
     }
 }
