@@ -123,7 +123,7 @@ async fn main() -> std::io::Result<()> {
     let mut finished = false;
 
     loop {
-        clear_background(BROWN);
+        clear_background(BEIGE);
         draw_map(&state, &texture_vec).await;
         if is_key_pressed(KeyCode::Escape) | is_key_pressed(KeyCode::Q) {
             break;

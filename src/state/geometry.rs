@@ -94,6 +94,10 @@ pub fn is_within_bounds(pos: Pos) -> bool {
     return (pos.x < WIDTH) & (pos.y < HEIGHT);
 }
 
+pub fn is_within_bounds_signed(x: i64, y: i64) -> bool {
+    return (x >= 0) & (x < WIDTH as i64) & (y >= 0) & (y < HEIGHT as i64);
+}
+
 pub fn are_neighbors(p1: Pos, p2: Pos) -> bool {
     return difference(p1, p2).square_norm() == 1;
 }

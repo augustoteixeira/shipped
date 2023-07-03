@@ -70,7 +70,7 @@ fn main() {
             })
             .collect(),
     );
-    for _ in 0..2 {
+    for _ in 0..100 {
         let _ = initial_state.build_entity_from_template(
             Team::Blue,
             gen_range(0, NUM_TEMPLATES),
@@ -79,7 +79,7 @@ fn main() {
     }
     let mut state = initial_state.clone();
     let mut frames: Vec<Frame> = vec![];
-    for _ in 1..20 {
+    for _ in 1..200 {
         let mut frame = vec![];
         let id_vec = state.get_entities_ids();
         for id in id_vec {

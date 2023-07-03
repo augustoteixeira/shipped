@@ -10,17 +10,10 @@ pub enum Effect {
     EntityMove(Pos, Pos),
     AssetsFloorToEntity { mat: Materials, from: Pos, to: Pos },
     AssetsEntityToFloor { mat: Materials, from: Pos, to: Pos },
-    Shoot(Attack),
-    Drill(Attack),
+    Shoot { from: Pos, to: Pos, damage: usize },
+    Drill { from: Pos, to: Pos, damage: usize },
     Construct(Construct),
     SendMessage(Pos, Option<Message>),
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Attack {
-    pub origin: Pos,
-    pub destination: Pos,
-    pub damage: usize,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -53,8 +46,13 @@ pub enum UpdateError {
         to: Pos,
         load: Materials,
     },
-    #[snafu(display("Attacking: {attack:?}"))]
-    AttackUnit { source: StateError, attack: Attack },
+    #[snafu(display("Attacking: {from:?}, {to:?}, {damage}"))]
+    AttackUnit {
+        source: StateError,
+        from: Pos,
+        to: Pos,
+        damage: usize,
+    },
     #[snafu(display("Construct: {construct:?}"))]
     ConstructError {
         source: StateError,
@@ -107,15 +105,19 @@ pub fn implement_effect(
                 },
             )?;
         }
-        Effect::Shoot(a) => {
-            state
-                .attack(a.destination, a.damage)
-                .context(AttackUnitSnafu { attack: a })?;
+        Effect::Shoot { from, to, damage } => {
+            state.attack(to, damage).context(AttackUnitSnafu {
+                from,
+                to,
+                damage,
+            })?;
         }
-        Effect::Drill(a) => {
-            state
-                .attack(a.destination, a.damage)
-                .context(AttackUnitSnafu { attack: a })?;
+        Effect::Drill { from, to, damage } => {
+            state.attack(to, damage).context(AttackUnitSnafu {
+                from,
+                to,
+                damage,
+            })?;
         }
         Effect::Construct(c) => {
             state
