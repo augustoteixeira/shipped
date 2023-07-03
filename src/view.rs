@@ -1,3 +1,10 @@
+extern crate rand;
+extern crate rand_chacha;
+
+use rand::prelude::*;
+use rand_chacha::ChaCha8Rng;
+
+use macroquad::rand::gen_range;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -6,7 +13,7 @@ use macroquad::prelude::*;
 pub mod state;
 
 use crate::state::constants::{HEIGHT, WIDTH};
-use crate::state::entity::{FullEntity, MovementType};
+use crate::state::entity::{FullEntity, Materials, MovementType};
 use crate::state::geometry::Pos;
 use crate::state::replay::{implement_effect, Script};
 use crate::state::state::State;
@@ -50,7 +57,7 @@ fn get_texture(e: &FullEntity) -> usize {
     }
 }
 
-async fn draw_tile(
+async fn draw_entity(
     entity: Option<&FullEntity>,
     i: usize,
     j: usize,
@@ -66,12 +73,28 @@ async fn draw_tile(
     }
 }
 
+async fn draw_materials(mat: Materials, i: usize, j: usize) {
+    let mut rng =
+        ChaCha8Rng::seed_from_u64((i * HEIGHT + j).try_into().unwrap());
+    for i in 0..mat.carbon {
+        draw_rectangle(
+            HOR_DISPLACE + (16 * j + rng.gen_range(0..13)) as f32,
+            VER_DISPLACE + (16 * i + rng.gen_range(0..13)) as f32,
+            2.0,
+            2.0,
+            RED,
+        );
+    }
+}
+
 async fn draw_map(state: &State, texture_vec: &Vec<Texture2D>) {
     let mut pos: Pos;
     for i in 0..WIDTH {
         for j in 0..HEIGHT {
             pos = Pos::new(i, j);
-            draw_tile(state.get_entity_option(pos), i, j, &texture_vec).await;
+            draw_materials(state.tiles[pos.to_index()].materials.clone(), i, j)
+                .await;
+            draw_entity(state.get_entity_option(pos), i, j, &texture_vec).await;
         }
     }
 }
@@ -100,7 +123,7 @@ async fn main() -> std::io::Result<()> {
     let mut finished = false;
 
     loop {
-        clear_background(LIGHTGRAY);
+        clear_background(BROWN);
         draw_map(&state, &texture_vec).await;
         if is_key_pressed(KeyCode::Escape) | is_key_pressed(KeyCode::Q) {
             break;
