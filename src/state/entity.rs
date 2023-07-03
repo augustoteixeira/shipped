@@ -126,6 +126,14 @@ impl Materials {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Abilities<T> {
+    pub movement_type: MovementType,
+    pub drill_damage: usize,
+    pub gun_damage: usize,
+    pub brain: T,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Entity<T> {
     pub pos: Pos,
     pub hp: usize,
@@ -135,12 +143,34 @@ pub struct Entity<T> {
     pub abilities: Option<Abilities<T>>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Abilities<T> {
-    pub movement_type: MovementType,
-    pub drill_damage: usize,
-    pub gun_damage: usize,
-    pub brain: T,
+impl<T> Entity<T> {
+    pub fn has_ability(&self) -> bool {
+        self.abilities.is_some()
+    }
+    pub fn can_shoot(&self) -> bool {
+        if let Some(a) = &self.abilities {
+            return a.gun_damage > 0;
+        } else {
+            return false;
+        }
+    }
+    pub fn can_move(&self) -> bool {
+        if let Some(a) = &self.abilities {
+            return a.movement_type == MovementType::Walk;
+        } else {
+            return false;
+        }
+    }
+    pub fn get_gun_damage(&self) -> Option<usize> {
+        if let Some(a) = &self.abilities {
+            return Some(a.gun_damage);
+        } else {
+            return None;
+        }
+    }
+    pub fn has_copper(&self) -> bool {
+        self.materials.copper > 0
+    }
 }
 
 pub type Half = [Option<u8>; NUM_SUB_ENTITIES];

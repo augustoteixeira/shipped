@@ -66,7 +66,12 @@ fn main() {
         (0..(WIDTH * HEIGHT))
             .map(|_| Tile {
                 entity_id: None,
-                materials: Materials::new(0, 1, 2, 3),
+                materials: Materials {
+                    carbon: gen_range(0, 2),
+                    silicon: gen_range(0, 2),
+                    plutonium: gen_range(0, 2),
+                    copper: gen_range(0, 2),
+                },
             })
             .collect(),
     );

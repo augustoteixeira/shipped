@@ -4,7 +4,6 @@ extern crate rand_chacha;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
-use macroquad::rand::gen_range;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -76,13 +75,40 @@ async fn draw_entity(
 async fn draw_materials(mat: Materials, i: usize, j: usize) {
     let mut rng =
         ChaCha8Rng::seed_from_u64((i * HEIGHT + j).try_into().unwrap());
-    for i in 0..mat.carbon {
+    for k in 0..mat.carbon {
         draw_rectangle(
-            HOR_DISPLACE + (16 * j + rng.gen_range(0..13)) as f32,
-            VER_DISPLACE + (16 * i + rng.gen_range(0..13)) as f32,
+            HOR_DISPLACE + ((16 * j) + rng.gen_range(0..13)) as f32,
+            VER_DISPLACE + ((16 * i) + rng.gen_range(0..13)) as f32,
             2.0,
             2.0,
-            RED,
+            BLACK,
+        );
+    }
+    for k in 0..mat.silicon {
+        draw_rectangle(
+            HOR_DISPLACE + ((16 * j) + rng.gen_range(0..13)) as f32,
+            VER_DISPLACE + ((16 * i) + rng.gen_range(0..13)) as f32,
+            2.0,
+            2.0,
+            GRAY,
+        );
+    }
+    for k in 0..mat.plutonium {
+        draw_rectangle(
+            HOR_DISPLACE + ((16 * j) + rng.gen_range(0..13)) as f32,
+            VER_DISPLACE + ((16 * i) + rng.gen_range(0..13)) as f32,
+            2.0,
+            2.0,
+            GREEN,
+        );
+    }
+    for k in 0..mat.copper {
+        draw_rectangle(
+            HOR_DISPLACE + ((16 * j) + rng.gen_range(0..13)) as f32,
+            VER_DISPLACE + ((16 * i) + rng.gen_range(0..13)) as f32,
+            2.0,
+            2.0,
+            ORANGE,
         );
     }
 }

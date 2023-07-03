@@ -1,3 +1,4 @@
+use line_drawing::Bresenham;
 use serde::{Deserialize, Serialize};
 use snafu::prelude::*;
 use std::cmp::max;
@@ -5,7 +6,7 @@ use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
 use super::entity::{Code, FullEntity, Id, Materials, Message};
-use super::geometry::Pos;
+use super::geometry::{is_within_bounds_signed, Displace, Pos};
 
 // https://wowpedia.fandom.com/wiki/Warcraft:_Orcs_%26_Humans_missions?file=WarCraft-Orcs%26amp%3BHumans-Orcs-Scenario9-SouthernElwynnForest.png
 
@@ -173,6 +174,19 @@ impl State {
         self.tiles[from.to_index()].entity_id = None;
         self.tiles[to.to_index()].entity_id = Some(id);
         Ok(())
+    }
+    pub fn get_visible(&self, from: Pos, disp: &Displace) -> Option<Pos> {
+        let point_from = (from.x as i64, from.y as i64);
+        let point_to = (from.x as i64 + disp.x, from.y as i64 + disp.y);
+        for (x, y) in Bresenham::new(point_from, point_to).skip(1) {
+            if !is_within_bounds_signed(x, y) {
+                return None;
+            }
+            if self.has_entity(Pos::new(x as usize, y as usize)) {
+                return Some(Pos::new(x as usize, y as usize));
+            }
+        }
+        Some(Pos::new(point_to.0 as usize, point_to.1 as usize))
     }
     pub fn move_material_to_entity(
         &mut self,
