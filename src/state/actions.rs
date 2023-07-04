@@ -4,7 +4,7 @@ use snafu::prelude::*;
 use super::entity::{Id, Materials, Message};
 use super::geometry::{
     add_displace, are_neighbors, is_within_bounds, Direction, Displace,
-    GeometryError, Pos,
+    GeometryError, Neighbor, Pos,
 };
 use super::replay::Effect;
 use super::state::{State, StateError};
@@ -19,10 +19,10 @@ pub struct Command {
 pub enum Verb {
     Wait,
     AttemptMove(Direction),
-    GetMaterials(Displace, Materials),
-    DropMaterials(Displace, Materials),
+    GetMaterials(Neighbor, Materials),
+    DropMaterials(Neighbor, Materials),
     Shoot(Displace),
-    Drill(Pos),
+    Drill(Neighbor),
     Construct(usize),
     SetMessage(Option<Message>),
 }
@@ -94,24 +94,24 @@ pub fn validate_command(
             ensure!(entity.can_move(), NoWalkSnafu { pos: entity.pos },);
             return Ok(Some(Effect::EntityMove(entity.pos, new_pos)));
         }
-        Verb::GetMaterials(disp, mat) => {
-            let floor_pos =
-                add_displace(entity.pos, &disp).context(DisplaceNegSnafu {
+        Verb::GetMaterials(neighbor, mat) => {
+            let floor_pos = add_displace(entity.pos, &neighbor.into())
+                .context(DisplaceNegSnafu {
                     pos: entity.pos,
-                    disp: disp.clone(),
+                    disp: neighbor.clone(),
                 })?;
             ensure!(
                 is_within_bounds(floor_pos),
                 OutOfBoundsSnafu { pos: floor_pos }
             );
-            ensure!(
-                are_neighbors(entity.pos, floor_pos)
-                    | (entity.pos == floor_pos),
-                InteractFarSnafu {
-                    from: entity.pos,
-                    to: floor_pos
-                }
-            );
+            // ensure!(
+            //     are_neighbors(entity.pos, floor_pos)
+            //         | (entity.pos == floor_pos),
+            //     InteractFarSnafu {
+            //         from: entity.pos,
+            //         to: floor_pos
+            //     }
+            // );
             ensure!(entity.has_ability(), NoAbilitySnafu { pos: entity.pos });
             return Ok(Some(Effect::AssetsFloorToEntity {
                 mat,
@@ -119,24 +119,24 @@ pub fn validate_command(
                 to: entity.pos,
             }));
         }
-        Verb::DropMaterials(disp, mat) => {
-            let floor_pos =
-                add_displace(entity.pos, &disp).context(DisplaceNegSnafu {
+        Verb::DropMaterials(neighbor, mat) => {
+            let floor_pos = add_displace(entity.pos, &neighbor.into())
+                .context(DisplaceNegSnafu {
                     pos: entity.pos,
-                    disp: disp.clone(),
+                    disp: neighbor.clone(),
                 })?;
             ensure!(
                 is_within_bounds(floor_pos),
                 OutOfBoundsSnafu { pos: floor_pos }
             );
-            ensure!(
-                are_neighbors(entity.pos, floor_pos)
-                    | (entity.pos == floor_pos),
-                InteractFarSnafu {
-                    from: entity.pos,
-                    to: floor_pos
-                }
-            );
+            // ensure!(
+            //     are_neighbors(entity.pos, floor_pos)
+            //         | (entity.pos == floor_pos),
+            //     InteractFarSnafu {
+            //         from: entity.pos,
+            //         to: floor_pos
+            //     }
+            // );
             ensure!(entity.has_ability(), NoAbilitySnafu { pos: entity.pos });
             return Ok(Some(Effect::AssetsEntityToFloor {
                 mat,

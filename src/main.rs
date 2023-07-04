@@ -11,7 +11,7 @@ use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{
     Abilities, Full, FullEntity, Materials, Message, MovementType, Team,
 };
-use crate::state::geometry::{Direction, Pos};
+use crate::state::geometry::{Direction, Neighbor, Pos};
 use crate::state::replay::{implement_effect, Frame, Script};
 use crate::state::state::{State, Tile};
 
@@ -52,13 +52,40 @@ fn random_entity(rng: &mut ChaCha8Rng, team: Team) -> FullEntity {
     }
 }
 
-fn random_direction(rng: &mut ChaCha8Rng) -> Verb {
+fn random_direction(rng: &mut ChaCha8Rng) -> Direction {
     match rng.gen_range(0..4) {
-        0 => Verb::AttemptMove(Direction::North),
-        1 => Verb::AttemptMove(Direction::East),
-        2 => Verb::AttemptMove(Direction::South),
-        3 => Verb::AttemptMove(Direction::West),
-        _ => unreachable!(),
+        0 => Direction::North,
+        1 => Direction::East,
+        2 => Direction::South,
+        _ => Direction::West,
+    }
+}
+
+fn random_neighbor(rng: &mut ChaCha8Rng) -> Neighbor {
+    match rng.gen_range(0..5) {
+        0 => Neighbor::North,
+        1 => Neighbor::East,
+        2 => Neighbor::South,
+        3 => Neighbor::West,
+        _ => Neighbor::Here,
+    }
+}
+
+fn random_material(rng: &mut ChaCha8Rng) -> Materials {
+    let material_type = rng.gen_range(0..4);
+    Materials {
+        carbon: if material_type == 0 { 1 } else { 0 },
+        silicon: if material_type == 1 { 1 } else { 0 },
+        plutonium: if material_type == 2 { 1 } else { 0 },
+        copper: if material_type == 3 { 1 } else { 0 },
+    }
+}
+
+fn random_verb(rng: &mut ChaCha8Rng) -> Verb {
+    match rng.gen_range(0..7) {
+        0 => Verb::AttemptMove(random_direction(rng)),
+        1 => Verb::GetMaterials(random_neighbor(rng), random_material(rng)),
+        _ => Verb::DropMaterials(random_neighbor(rng), random_material(rng)),
     }
 }
 
@@ -68,24 +95,9 @@ fn main() {
     let mut initial_state = State::new(
         std::array::from_fn(|_| None),
         HashMap::new(),
-        [
-            Some(random_entity(&mut rng, Team::Blue)),
-            Some(random_entity(&mut rng, Team::Blue)),
-            Some(random_entity(&mut rng, Team::Blue)),
-            Some(random_entity(&mut rng, Team::Blue)),
-        ],
-        [
-            Some(random_entity(&mut rng, Team::Gray)),
-            Some(random_entity(&mut rng, Team::Gray)),
-            Some(random_entity(&mut rng, Team::Gray)),
-            Some(random_entity(&mut rng, Team::Gray)),
-        ],
-        [
-            Some(random_entity(&mut rng, Team::Red)),
-            Some(random_entity(&mut rng, Team::Red)),
-            Some(random_entity(&mut rng, Team::Red)),
-            Some(random_entity(&mut rng, Team::Red)),
-        ],
+        std::array::from_fn(|_| Some(random_entity(&mut rng, Team::Blue))),
+        std::array::from_fn(|_| Some(random_entity(&mut rng, Team::Gray))),
+        std::array::from_fn(|_| Some(random_entity(&mut rng, Team::Red))),
         (0..(WIDTH * HEIGHT))
             .map(|_| Tile {
                 entity_id: None,
@@ -98,7 +110,7 @@ fn main() {
             })
             .collect(),
     );
-    for _ in 0..200 {
+    for _ in 0..100 {
         let _ = initial_state.build_entity_from_template(
             match rng.gen_range(0..3) {
                 0 => Team::Blue,
@@ -111,7 +123,7 @@ fn main() {
     }
     let mut state = initial_state.clone();
     let mut frames: Vec<Frame> = vec![];
-    for _ in 1..200 {
+    for _ in 1..1000 {
         let mut frame = vec![];
         let id_vec = state.get_entities_ids();
         for id in id_vec {
@@ -121,13 +133,14 @@ fn main() {
                 &state,
                 Command {
                     entity_id: id,
-                    verb: random_direction(&mut rng),
+                    verb: random_verb(&mut rng),
                 },
             ) {
                 Ok(Some(e)) => {
                     //eprintln!("Effect {:?}", e.clone());
-                    frame.push(e.clone());
-                    implement_effect(&mut state, e).unwrap();
+                    if let Ok(_) = implement_effect(&mut state, e.clone()) {
+                        frame.push(e.clone());
+                    }
                 }
                 Ok(None) => {}
                 Err(_e) => { //eprintln! {"Error {:}", e}},

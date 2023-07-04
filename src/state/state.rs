@@ -214,16 +214,16 @@ impl State {
         load: &Materials,
     ) -> Result<(), StateError> {
         ensure!(self.has_entity(from), EmptyTileSnafu { pos: from });
-        let entity = self.get_mut_entity(to)?;
+        let entity = self.get_mut_entity(from)?;
         ensure!(
-            entity.inventory_size >= load.volume(),
+            entity.materials >= *load,
             NoMaterialEntitySnafu {
                 pos: from,
                 load: load.clone()
             }
         );
         entity.materials -= load.clone();
-        self.tiles[from.to_index()].materials += load.clone();
+        self.tiles[to.to_index()].materials += load.clone();
         Ok(())
     }
     pub fn attack(

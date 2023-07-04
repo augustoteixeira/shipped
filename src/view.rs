@@ -19,7 +19,7 @@ use crate::state::state::State;
 
 const HOR_DISPLACE: f32 = 150.;
 const VER_DISPLACE: f32 = 25.;
-const FRAME_TIME: f64 = 0.2;
+const FRAME_TIME: f64 = 0.05;
 
 fn window_conf() -> Conf {
     Conf {

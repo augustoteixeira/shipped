@@ -18,6 +18,15 @@ pub enum Direction {
     West,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub enum Neighbor {
+    North,
+    East,
+    South,
+    West,
+    Here,
+}
+
 impl Pos {
     pub fn new(x: usize, y: usize) -> Self {
         Pos { x, y }
@@ -40,6 +49,18 @@ impl From<Direction> for Displace {
             Direction::East => Displace { x: 1, y: 0 },
             Direction::South => Displace { x: 0, y: 1 },
             Direction::West => Displace { x: -1, y: 0 },
+        }
+    }
+}
+
+impl From<Neighbor> for Displace {
+    fn from(d: Neighbor) -> Self {
+        match d {
+            Neighbor::North => Displace { x: 0, y: -1 },
+            Neighbor::East => Displace { x: 1, y: 0 },
+            Neighbor::South => Displace { x: 0, y: 1 },
+            Neighbor::West => Displace { x: -1, y: 0 },
+            Neighbor::Here => Displace { x: 0, y: 0 },
         }
     }
 }
