@@ -23,7 +23,7 @@ pub enum Verb {
     DropMaterials(Neighbor, Materials),
     Shoot(Displace),
     Drill(Direction),
-    Construct(usize),
+    Construct(usize, Direction),
     SetMessage(Option<Message>),
 }
 
@@ -57,6 +57,15 @@ pub enum ValidationError {
     NotVisible { pos: Pos, disp: Displace },
     #[snafu(display("Too far to interact {:?}", disp))]
     TooFar { disp: Displace },
+    #[snafu(display("Error constructing from {}, index {}", pos, index))]
+    Construct {
+        source: StateError,
+        pos: Pos,
+        index: usize,
+        dir: Direction,
+    },
+    #[snafu(display("Entity at {} does not have enough {:?}", pos, mat))]
+    NotEnoughMaterial { pos: Pos, mat: Materials },
 }
 
 pub fn validate_command(
@@ -176,6 +185,16 @@ pub fn validate_command(
                 to,
                 damage,
             }));
+        }
+        Verb::Construct(index, dir) => {
+            state.construct_creature(entity.pos, index, dir).context(
+                ConstructSnafu {
+                    pos: entity.pos,
+                    index,
+                    dir,
+                },
+            )?;
+            return Ok(None);
         }
         _ => return Ok(None),
     };

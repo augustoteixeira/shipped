@@ -129,7 +129,7 @@ async fn draw_map(state: &State, tileset: &Texture2D) {
     }
 }
 
-async fn draw_events(state: &State, frame_option: &Option<&Vec<Effect>>) {
+async fn draw_events(frame_option: &Option<&Vec<Effect>>) {
     if let Some(&ref frame) = frame_option {
         for e in frame.iter() {
             match e.clone() {
@@ -274,7 +274,7 @@ async fn main() -> std::io::Result<()> {
             }
         }
         draw_map(&state, &tileset).await;
-        draw_events(&state, &script.frames.get(frame_number)).await;
+        draw_events(&script.frames.get(frame_number)).await;
         if is_key_pressed(KeyCode::Escape) | is_key_pressed(KeyCode::Q) {
             break;
         }

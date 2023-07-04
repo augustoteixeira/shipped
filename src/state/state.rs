@@ -5,8 +5,11 @@ use std::cmp::max;
 use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
-use super::entity::{Code, FullEntity, Id, Materials, Message, Team};
-use super::geometry::{is_within_bounds_signed, Displace, Pos};
+use super::entity::{cost, Code, FullEntity, Id, Materials, Message, Team};
+use super::geometry::{
+    add_displace, is_within_bounds_signed, Direction, Displace, GeometryError,
+    Pos,
+};
 
 // https://wowpedia.fandom.com/wiki/Warcraft:_Orcs_%26_Humans_missions?file=WarCraft-Orcs%26amp%3BHumans-Orcs-Scenario9-SouthernElwynnForest.png
 
@@ -41,6 +44,12 @@ pub struct State {
 
 #[derive(Debug, Snafu)]
 pub enum StateError {
+    #[snafu(display("Displace {:?} from {:?} out of bounds", disp, pos))]
+    DisplaceOutOfBounds {
+        source: GeometryError,
+        pos: Pos,
+        disp: Displace,
+    },
     #[snafu(display("No entity in {:?}", pos))]
     EmptyTile { pos: Pos },
     #[snafu(display("Occupied tile {:?}", pos))]
@@ -91,6 +100,22 @@ impl State {
     pub fn get_floor_mat(&self, pos: Pos) -> &Materials {
         &self.tiles[pos.to_index()].materials
     }
+    pub fn get_creature(
+        &self,
+        team: Team,
+        template: usize,
+    ) -> Result<FullEntity, StateError> {
+        ensure!(
+            template < NUM_TEMPLATES,
+            TemplateOutOfBoundsSnafu { template }
+        );
+        match team {
+            Team::Blue => self.blue_templates[template].clone(),
+            Team::Gray => self.gray_templates[template].clone(),
+            Team::Red => self.red_templates[template].clone(),
+        }
+        .ok_or(StateError::NoTemplate { team, template })
+    }
     pub fn build_entity_from_template(
         &mut self,
         team: Team,
@@ -98,20 +123,35 @@ impl State {
         pos: Pos,
     ) -> Result<(), StateError> {
         ensure!(!self.has_entity(pos), OccupiedTileSnafu { pos });
-        ensure!(
-            template < NUM_TEMPLATES,
-            TemplateOutOfBoundsSnafu { template }
-        );
-        let mut entity = match team {
-            Team::Blue => self.blue_templates[template].clone(),
-            Team::Gray => self.gray_templates[template].clone(),
-            Team::Red => self.red_templates[template].clone(),
-        }
-        .ok_or(StateError::NoTemplate { team, template })?;
+        let mut entity = self.get_creature(team, template)?;
         entity.pos = pos;
         self.entities.insert(self.next_unique_id, entity);
         self.tiles[pos.to_index()].entity_id = Some(self.next_unique_id);
         self.next_unique_id += 1;
+        Ok(())
+    }
+    pub fn construct_creature(
+        &mut self,
+        from: Pos,
+        template: usize,
+        dir: Direction,
+    ) -> Result<(), StateError> {
+        let entity = self.get_entity(from)?;
+        let creature = self.get_creature(entity.team, template)?;
+        ensure!(
+            entity.materials >= cost(&creature),
+            NoMaterialEntitySnafu {
+                pos: entity.pos,
+                load: cost(&creature)
+            }
+        );
+        let pos = add_displace(entity.pos, &Displace::from(dir)).context(
+            DisplaceOutOfBoundsSnafu {
+                pos: entity.pos,
+                disp: Displace::from(dir.clone()),
+            },
+        )?;
+        self.build_entity_from_template(entity.team, template, pos)?;
         Ok(())
     }
     pub fn remove_entity(&mut self, pos: Pos) -> Result<(), StateError> {

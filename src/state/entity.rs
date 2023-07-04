@@ -217,12 +217,12 @@ pub fn weight(body: &Entity<Full>) -> usize {
     result
 }
 
-pub fn cost(body: FullEntity) -> Materials {
+pub fn cost(body: &FullEntity) -> Materials {
     let w = weight(&body);
-    let mut result = body.materials;
+    let mut result = body.materials.clone();
     result.carbon += body.hp * body.hp;
     result.carbon += body.inventory_size * body.inventory_size;
-    if let Some(a) = body.abilities {
+    if let Some(a) = &body.abilities {
         match a.movement_type {
             MovementType::Still => {}
             MovementType::Walk => result.plutonium += w,
