@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 use snafu::prelude::*;
 
-use super::entity::{Materials, Message};
+use super::entity::{Materials, Message, Team};
 use super::geometry::Pos;
-use super::state::{State, StateError, Team};
+use super::state::{State, StateError};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Effect {

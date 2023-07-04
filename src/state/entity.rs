@@ -7,6 +7,13 @@ use super::geometry::Pos;
 
 pub type Id = usize;
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub enum Team {
+    Blue,
+    Gray,
+    Red,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum MovementType {
     Still,
@@ -135,6 +142,7 @@ pub struct Abilities<T> {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Entity<T> {
+    pub team: Team,
     pub pos: Pos,
     pub hp: usize,
     pub max_hp: usize,

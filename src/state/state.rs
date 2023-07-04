@@ -5,7 +5,7 @@ use std::cmp::max;
 use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
-use super::entity::{Code, FullEntity, Id, Materials, Message};
+use super::entity::{Code, FullEntity, Id, Materials, Message, Team};
 use super::geometry::{is_within_bounds_signed, Displace, Pos};
 
 // https://wowpedia.fandom.com/wiki/Warcraft:_Orcs_%26_Humans_missions?file=WarCraft-Orcs%26amp%3BHumans-Orcs-Scenario9-SouthernElwynnForest.png
@@ -18,13 +18,6 @@ use super::geometry::{is_within_bounds_signed, Displace, Pos};
 // }
 
 // pub type Geography = [Terrain; WIDTH * HEIGHT];
-
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
-pub enum Team {
-    Blue,
-    Gray,
-    Red,
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Tile {
