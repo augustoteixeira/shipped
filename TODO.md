@@ -1,7 +1,8 @@
 State + Viewer
 --------------
 
-- add more random actions
+- implement construction
+- implement victory
 - make a type for the board preparation and a function to execute the board
 
 Add Coding
