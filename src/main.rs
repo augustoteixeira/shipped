@@ -11,7 +11,7 @@ use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{
     Abilities, Full, FullEntity, Materials, Message, MovementType, Team,
 };
-use crate::state::geometry::{Direction, Neighbor, Pos};
+use crate::state::geometry::{Direction, Displace, Neighbor, Pos};
 use crate::state::replay::{implement_effect, Frame, Script};
 use crate::state::state::{State, Tile};
 
@@ -38,7 +38,7 @@ fn random_entity(rng: &mut ChaCha8Rng, team: Team) -> FullEntity {
                 _ => MovementType::Walk,
             },
             drill_damage: rng.gen_range(0..2),
-            gun_damage: rng.gen_range(0..2),
+            gun_damage: rng.gen_range(0..2) + 4 * rng.gen_range(0..2),
             brain: Full {
                 half: [None, None, None, None],
                 message: Some(Message {
@@ -71,6 +71,13 @@ fn random_neighbor(rng: &mut ChaCha8Rng) -> Neighbor {
     }
 }
 
+fn random_vicinity(rng: &mut ChaCha8Rng) -> Displace {
+    Displace::new(
+        rng.gen_range(0..11) as i64 - 5,
+        rng.gen_range(0..11) as i64 - 5,
+    )
+}
+
 fn random_material(rng: &mut ChaCha8Rng) -> Materials {
     let material_type = rng.gen_range(0..4);
     Materials {
@@ -85,12 +92,14 @@ fn random_verb(rng: &mut ChaCha8Rng) -> Verb {
     match rng.gen_range(0..7) {
         0 => Verb::AttemptMove(random_direction(rng)),
         1 => Verb::GetMaterials(random_neighbor(rng), random_material(rng)),
-        _ => Verb::DropMaterials(random_neighbor(rng), random_material(rng)),
+        2 => Verb::DropMaterials(random_neighbor(rng), random_material(rng)),
+        3 => Verb::Shoot(random_vicinity(rng)),
+        _ => Verb::Drill(random_direction(rng)),
     }
 }
 
 fn main() {
-    let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(25).try_into().unwrap();
+    let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(21).try_into().unwrap();
 
     let mut initial_state = State::new(
         std::array::from_fn(|_| None),

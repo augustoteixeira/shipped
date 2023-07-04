@@ -14,7 +14,7 @@ pub mod state;
 use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::{FullEntity, Materials, MovementType, Team};
 use crate::state::geometry::Pos;
-use crate::state::replay::{implement_effect, Script};
+use crate::state::replay::{implement_effect, Effect, Script};
 use crate::state::state::State;
 
 const HOR_DISPLACE: f32 = 150.;
@@ -129,6 +129,48 @@ async fn draw_map(state: &State, tileset: &Texture2D) {
     }
 }
 
+async fn draw_events(state: &State, frame_option: &Option<&Vec<Effect>>) {
+    if let Some(&ref frame) = frame_option {
+        for e in frame.iter() {
+            match e.clone() {
+                Effect::Shoot { from, to, damage } => {
+                    draw_line(
+                        HOR_DISPLACE + (16 * from.y) as f32 + 8.0,
+                        VER_DISPLACE + (16 * from.x) as f32 + 8.0,
+                        HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
+                        VER_DISPLACE + (16 * to.x) as f32 + 8.0,
+                        6.0 - (5.0 / (damage as f32)),
+                        RED,
+                    );
+                    draw_circle(
+                        HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
+                        VER_DISPLACE + (16 * to.x) as f32 + 8.0,
+                        12.0 - (11.0 / (damage as f32)),
+                        RED,
+                    );
+                }
+                Effect::Drill { from, to, damage } => {
+                    draw_line(
+                        HOR_DISPLACE + (16 * from.y) as f32 + 8.0,
+                        VER_DISPLACE + (16 * from.x) as f32 + 8.0,
+                        HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
+                        VER_DISPLACE + (16 * to.x) as f32 + 8.0,
+                        6.0 - (3.0 / (damage as f32)),
+                        BLUE,
+                    );
+                    draw_circle(
+                        HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
+                        VER_DISPLACE + (16 * to.x) as f32 + 8.0,
+                        12.0 - (6.0 / (damage as f32)),
+                        BLUE,
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
 async fn draw_entity(
     entity: Option<&FullEntity>,
     i: usize,
@@ -232,7 +274,7 @@ async fn main() -> std::io::Result<()> {
             }
         }
         draw_map(&state, &tileset).await;
-        //draw_map(&state, &texture_vec).await;
+        draw_events(&state, &script.frames.get(frame_number)).await;
         if is_key_pressed(KeyCode::Escape) | is_key_pressed(KeyCode::Q) {
             break;
         }

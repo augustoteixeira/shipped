@@ -22,7 +22,7 @@ pub enum Verb {
     GetMaterials(Neighbor, Materials),
     DropMaterials(Neighbor, Materials),
     Shoot(Displace),
-    Drill(Neighbor),
+    Drill(Direction),
     Construct(usize),
     SetMessage(Option<Message>),
 }
@@ -158,6 +158,22 @@ pub fn validate_command(
             return Ok(Some(Effect::Shoot {
                 from: entity.pos,
                 to: target,
+                damage,
+            }));
+        }
+        Verb::Drill(dir) => {
+            ensure!(entity.has_ability(), NoAbilitySnafu { pos: entity.pos });
+            let damage = entity.get_drill_damage().unwrap();
+            let to = add_displace(entity.pos, &dir.into()).context(
+                DisplaceNegSnafu {
+                    pos: entity.pos,
+                    disp: dir.clone(),
+                },
+            )?;
+            ensure!(is_within_bounds(to), OutOfBoundsSnafu { pos: to });
+            return Ok(Some(Effect::Drill {
+                from: entity.pos,
+                to,
                 damage,
             }));
         }

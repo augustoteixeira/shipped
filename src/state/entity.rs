@@ -169,6 +169,13 @@ impl<T> Entity<T> {
             return false;
         }
     }
+    pub fn get_drill_damage(&self) -> Option<usize> {
+        if let Some(a) = &self.abilities {
+            return Some(a.drill_damage);
+        } else {
+            return None;
+        }
+    }
     pub fn get_gun_damage(&self) -> Option<usize> {
         if let Some(a) = &self.abilities {
             return Some(a.gun_damage);
