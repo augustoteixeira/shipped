@@ -89,7 +89,7 @@ fn main() {
         let id_vec = state.get_entities_ids();
         for id in id_vec {
             let entity = state.get_entity_by_id(id).unwrap();
-            eprintln!("Entity {} at {:?}", id, entity.pos);
+            //eprintln!("Entity {} at {:?}", id, entity.pos);
             match validate_command(
                 &state,
                 Command {
@@ -98,12 +98,13 @@ fn main() {
                 },
             ) {
                 Ok(Some(e)) => {
-                    eprintln!("Effect {:?}", e.clone());
+                    //eprintln!("Effect {:?}", e.clone());
                     frame.push(e.clone());
                     implement_effect(&mut state, e).unwrap();
                 }
                 Ok(None) => {}
-                Err(e) => eprintln! {"Error {:}", e},
+                Err(e) => { //eprintln! {"Error {:}", e}},
+                }
             }
 
             // let pos = Pos::new(gen_range(1, 59), gen_range(1, 59));
