@@ -231,5 +231,8 @@ pub fn cost(body: &FullEntity) -> Materials {
         result.plutonium += a.gun_damage * a.gun_damage;
         result.plutonium += a.brain.gas / 10 + 1;
     }
+    // TODO remove this:
+    result.carbon = 1;
+    result.plutonium = 1;
     result
 }

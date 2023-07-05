@@ -6,14 +6,13 @@ use rand_chacha::ChaCha8Rng;
 
 use std::collections::HashMap;
 
-use crate::state::actions::{validate_command, Command, Verb};
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{
     Abilities, Full, FullEntity, Materials, Message, MovementType, Team,
 };
 use crate::state::geometry::{Direction, Displace, Neighbor, Pos};
 use crate::state::replay::{Frame, Script};
-use crate::state::state::{State, Tile};
+use crate::state::state::{Command, State, Tile, Verb};
 
 pub mod state;
 
@@ -103,7 +102,7 @@ fn random_verb(rng: &mut ChaCha8Rng) -> Verb {
 }
 
 fn main() {
-    let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(21).try_into().unwrap();
+    let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(17).try_into().unwrap();
 
     let mut initial_state = State::new(
         std::array::from_fn(|_| None),
@@ -115,17 +114,16 @@ fn main() {
             .map(|_| Tile {
                 entity_id: None,
                 materials: Materials {
-                    carbon: rng.gen_range(0..20) / 19,
-                    silicon: rng.gen_range(0..20) / 19,
-                    plutonium: rng.gen_range(0..20) / 19,
-                    copper: rng.gen_range(0..20) / 19,
+                    carbon: rng.gen_range(0..20) / 13,
+                    silicon: rng.gen_range(0..20) / 13,
+                    plutonium: rng.gen_range(0..20) / 13,
+                    copper: rng.gen_range(0..20) / 13,
                 },
             })
             .collect(),
     );
     for _ in 0..100 {
         let pos = Pos::new(rng.gen_range(0..WIDTH), rng.gen_range(0..HEIGHT));
-        //println!("{:?}", pos);
         let _ = initial_state.build_entity_from_template(
             match rng.gen_range(0..3) {
                 0 => Team::Blue,
@@ -144,13 +142,19 @@ fn main() {
         for id in id_vec {
             //let entity = state.get_entity_by_id(id).unwrap();
             //eprintln!("Entity {} at {:?}", id, entity.pos);
-            match validate_command(
-                &mut state,
-                Command {
-                    entity_id: id,
-                    verb: random_verb(&mut rng),
-                },
-            ) {
+
+            // match validate_command(
+            //     &mut state,
+            //     Command {
+            //         entity_id: id,
+            //         verb: random_verb(&mut rng),
+            //     },
+            // ) {
+
+            match state.execute_command(Command {
+                entity_id: id,
+                verb: random_verb(&mut rng),
+            }) {
                 Ok(Some(e)) => {
                     //eprintln!("Effect {:?}", e.clone());
                     //implement_effect(&mut state, e.clone());

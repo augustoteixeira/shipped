@@ -8,8 +8,9 @@ use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
 use super::entity::{cost, Code, FullEntity, Id, Materials, Message, Team};
 use super::geometry::{
     add_displace, is_within_bounds_signed, Direction, Displace, GeometryError,
-    Pos,
+    Neighbor, Pos,
 };
+use super::replay::{implement_effect, Construct, Effect};
 
 // https://wowpedia.fandom.com/wiki/Warcraft:_Orcs_%26_Humans_missions?file=WarCraft-Orcs%26amp%3BHumans-Orcs-Scenario9-SouthernElwynnForest.png
 
@@ -42,6 +43,24 @@ pub struct State {
     pub tiles: Vec<Tile>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Command {
+    pub entity_id: usize,
+    pub verb: Verb,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum Verb {
+    Wait,
+    AttemptMove(Direction),
+    GetMaterials(Neighbor, Materials),
+    DropMaterials(Neighbor, Materials),
+    Shoot(Displace),
+    Drill(Direction),
+    Construct(usize, Direction),
+    SetMessage(Option<Message>),
+}
+
 #[derive(Debug, Snafu)]
 pub enum StateError {
     #[snafu(display("Displace {:?} from {:?} out of bounds", disp, pos))]
@@ -64,10 +83,20 @@ pub enum StateError {
     TemplateOutOfBounds { template: usize },
     #[snafu(display("Entity in {pos} has no abilities"))]
     NoAbilities { pos: Pos },
+    #[snafu(display("Entity in {pos} cannot shoot"))]
+    NoShoot { pos: Pos },
+    #[snafu(display("Entity in {pos} has no copper"))]
+    NoCopper { pos: Pos },
+    #[snafu(display("Entity in {pos} cannot walk"))]
+    NoWalk { pos: Pos },
+    #[snafu(display("Displacement {:?} too far", disp))]
+    DisplaceTooFar { disp: Displace },
     #[snafu(display("No entity in {team:?} with template{template}"))]
     NoTemplate { team: Team, template: usize },
     #[snafu(display("No entity with id {id}"))]
     NoEntityWithId { id: Id },
+    #[snafu(display("Cannot see from {:?} to {:?}", pos, disp))]
+    NotVisible { pos: Pos, disp: Displace },
 }
 
 impl State {
@@ -92,7 +121,6 @@ impl State {
         }
     }
     pub fn has_entity(&self, pos: Pos) -> bool {
-        println!("has entity in {:?}?", pos);
         self.tiles[pos.to_index()].entity_id.is_some()
     }
     pub fn get_tile(&self, pos: Pos) -> &Tile {
@@ -277,5 +305,121 @@ impl State {
             .ok_or(StateError::NoAbilities { pos })?;
         abilities.brain.message = message.clone();
         Ok(())
+    }
+    pub fn add_displace(pos: Pos, disp: &Displace) -> Result<Pos, StateError> {
+        add_displace(pos, disp).context(DisplaceOutOfBoundsSnafu {
+            pos: pos,
+            disp: disp.clone(),
+        })
+    }
+    pub fn execute_command(
+        &mut self,
+        command: Command,
+    ) -> Result<Option<Effect>, StateError> {
+        let entity = self.get_entity_by_id(command.entity_id)?;
+        let effect: Option<Effect> = match command.verb {
+            Verb::Wait => return Ok(None),
+            Verb::AttemptMove(dir) => {
+                ensure!(entity.can_move(), NoWalkSnafu { pos: entity.pos },);
+                let new_pos =
+                    State::add_displace(entity.pos, &Displace::from(dir))?;
+                ensure!(
+                    !self.has_entity(new_pos),
+                    OccupiedTileSnafu { pos: new_pos }
+                );
+                Some(Effect::EntityMove(entity.pos, new_pos))
+            }
+            Verb::GetMaterials(neighbor, mat) => {
+                let floor_pos =
+                    State::add_displace(entity.pos, &neighbor.into())?;
+                ensure!(
+                    entity.has_ability(),
+                    NoAbilitiesSnafu { pos: entity.pos }
+                );
+                Some(Effect::AssetsFloorToEntity {
+                    mat,
+                    from: floor_pos,
+                    to: entity.pos,
+                })
+            }
+            Verb::DropMaterials(neighbor, mat) => {
+                let floor_pos =
+                    State::add_displace(entity.pos, &neighbor.into())?;
+                ensure!(
+                    entity.has_ability(),
+                    NoAbilitiesSnafu { pos: entity.pos }
+                );
+                Some(Effect::AssetsEntityToFloor {
+                    mat,
+                    from: entity.pos,
+                    to: floor_pos,
+                })
+            }
+            Verb::Shoot(disp) => {
+                ensure!(entity.can_shoot(), NoShootSnafu { pos: entity.pos });
+                ensure!(entity.has_copper(), NoCopperSnafu { pos: entity.pos });
+                let damage = entity.get_gun_damage().unwrap();
+                ensure!(
+                    disp.square_norm() <= 25,
+                    DisplaceTooFarSnafu { disp: disp }
+                );
+                let target = self.get_visible(entity.pos, &disp).ok_or(
+                    StateError::NotVisible {
+                        pos: entity.pos,
+                        disp: disp.clone(),
+                    },
+                )?;
+                Some(Effect::Shoot {
+                    from: entity.pos,
+                    to: target,
+                    damage,
+                })
+            }
+            Verb::Drill(dir) => {
+                ensure!(
+                    entity.has_ability(),
+                    NoAbilitiesSnafu { pos: entity.pos }
+                );
+                let damage = entity.get_drill_damage().unwrap();
+                let to = add_displace(entity.pos, &dir.into()).context(
+                    DisplaceOutOfBoundsSnafu {
+                        pos: entity.pos,
+                        disp: dir.clone(),
+                    },
+                )?;
+                Some(Effect::Drill {
+                    from: entity.pos,
+                    to,
+                    damage,
+                })
+            }
+            Verb::Construct(index, dir) => {
+                let creature = self.get_creature(entity.team, index)?;
+                ensure!(
+                    entity.materials >= cost(&creature),
+                    NoMaterialEntitySnafu {
+                        pos: entity.pos,
+                        load: cost(&creature)
+                    }
+                );
+                let creature_pos =
+                    State::add_displace(entity.pos, &Displace::from(dir))?;
+                let entity_pos = entity.pos;
+                let team = entity.team;
+                Some(Effect::Construct(Construct {
+                    team,
+                    template_index: index,
+                    builder: entity_pos,
+                    buildee: creature_pos,
+                }))
+            }
+            _ => None,
+        };
+        if let Some(e) = &effect {
+            if implement_effect(self, e.clone()).is_ok() {
+                return Ok(effect);
+            }
+        }
+        return Ok(None);
     }
 }

@@ -76,16 +76,14 @@ impl Displace {
 
 #[derive(Debug, Snafu)]
 pub enum GeometryError {
-    #[snafu(display(
-        "Point {} displaced by {:?} falls out of bounds",
-        pos,
-        d
-    ))]
+    #[snafu(display("Displace {} by {:?} out of bounds", pos, d))]
     DisplacedOutOfBounds {
         source: TryFromIntError,
         pos: Pos,
         d: Displace,
     },
+    #[snafu(display("Displace {} by {:?} out of bounds large", pos, d))]
+    DisplaceOutOfBoundsLarge { pos: Pos, d: Displace },
 }
 
 pub fn add_displace(pos: Pos, disp: &Displace) -> Result<Pos, GeometryError> {
@@ -101,7 +99,15 @@ pub fn add_displace(pos: Pos, disp: &Displace) -> Result<Pos, GeometryError> {
             d: disp.clone(),
         },
     )?;
-    Ok(Pos::new(x, y))
+    let new_pos = Pos::new(x, y);
+    ensure!(
+        is_within_bounds(new_pos),
+        DisplaceOutOfBoundsLargeSnafu {
+            pos,
+            d: disp.clone()
+        }
+    );
+    Ok(new_pos)
 }
 
 pub fn difference(p1: Pos, p2: Pos) -> Displace {
