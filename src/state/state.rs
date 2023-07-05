@@ -92,6 +92,7 @@ impl State {
         }
     }
     pub fn has_entity(&self, pos: Pos) -> bool {
+        println!("has entity in {:?}?", pos);
         self.tiles[pos.to_index()].entity_id.is_some()
     }
     pub fn get_tile(&self, pos: Pos) -> &Tile {
@@ -136,22 +137,7 @@ impl State {
         template: usize,
         dir: Direction,
     ) -> Result<(), StateError> {
-        let entity = self.get_entity(from)?;
-        let creature = self.get_creature(entity.team, template)?;
-        ensure!(
-            entity.materials >= cost(&creature),
-            NoMaterialEntitySnafu {
-                pos: entity.pos,
-                load: cost(&creature)
-            }
-        );
-        let pos = add_displace(entity.pos, &Displace::from(dir)).context(
-            DisplaceOutOfBoundsSnafu {
-                pos: entity.pos,
-                disp: Displace::from(dir.clone()),
-            },
-        )?;
-        self.build_entity_from_template(entity.team, template, pos)?;
+        //IMPLEMENT_MATERIAL_SUBTRACTION!!!
         Ok(())
     }
     pub fn remove_entity(&mut self, pos: Pos) -> Result<(), StateError> {

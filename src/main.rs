@@ -12,7 +12,7 @@ use crate::state::entity::{
     Abilities, Full, FullEntity, Materials, Message, MovementType, Team,
 };
 use crate::state::geometry::{Direction, Displace, Neighbor, Pos};
-use crate::state::replay::{implement_effect, Frame, Script};
+use crate::state::replay::{Frame, Script};
 use crate::state::state::{State, Tile};
 
 pub mod state;
@@ -94,6 +94,10 @@ fn random_verb(rng: &mut ChaCha8Rng) -> Verb {
         1 => Verb::GetMaterials(random_neighbor(rng), random_material(rng)),
         2 => Verb::DropMaterials(random_neighbor(rng), random_material(rng)),
         3 => Verb::Shoot(random_vicinity(rng)),
+        4 => Verb::Construct(
+            rng.gen_range(0..NUM_TEMPLATES),
+            random_direction(rng),
+        ),
         _ => Verb::Drill(random_direction(rng)),
     }
 }
@@ -120,6 +124,8 @@ fn main() {
             .collect(),
     );
     for _ in 0..100 {
+        let pos = Pos::new(rng.gen_range(0..WIDTH), rng.gen_range(0..HEIGHT));
+        //println!("{:?}", pos);
         let _ = initial_state.build_entity_from_template(
             match rng.gen_range(0..3) {
                 0 => Team::Blue,
@@ -127,7 +133,7 @@ fn main() {
                 _ => Team::Red,
             },
             rng.gen_range(0..NUM_TEMPLATES),
-            Pos::new(rng.gen_range(0..WIDTH), rng.gen_range(0..HEIGHT)),
+            pos,
         );
     }
     let mut state = initial_state.clone();
@@ -139,7 +145,7 @@ fn main() {
             //let entity = state.get_entity_by_id(id).unwrap();
             //eprintln!("Entity {} at {:?}", id, entity.pos);
             match validate_command(
-                &state,
+                &mut state,
                 Command {
                     entity_id: id,
                     verb: random_verb(&mut rng),
@@ -147,9 +153,8 @@ fn main() {
             ) {
                 Ok(Some(e)) => {
                     //eprintln!("Effect {:?}", e.clone());
-                    if let Ok(_) = implement_effect(&mut state, e.clone()) {
-                        frame.push(e.clone());
-                    }
+                    //implement_effect(&mut state, e.clone());
+                    frame.push(e.clone());
                 }
                 Ok(None) => {}
                 Err(_e) => { //eprintln! {"Error {:}", e}},
