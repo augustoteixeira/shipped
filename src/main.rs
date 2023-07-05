@@ -151,14 +151,15 @@ fn main() {
             //     },
             // ) {
 
-            match state.execute_command(Command {
+            let command = Command {
                 entity_id: id,
                 verb: random_verb(&mut rng),
-            }) {
-                Ok(Some(e)) => {
+            };
+            match state.execute_command(command.clone()) {
+                Ok(Some(_)) => {
                     //eprintln!("Effect {:?}", e.clone());
                     //implement_effect(&mut state, e.clone());
-                    frame.push(e.clone());
+                    frame.push(command.clone());
                 }
                 Ok(None) => {}
                 Err(_e) => { //eprintln! {"Error {:}", e}},

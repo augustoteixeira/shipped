@@ -14,8 +14,8 @@ pub mod state;
 use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::{FullEntity, Materials, MovementType, Team};
 use crate::state::geometry::Pos;
-use crate::state::replay::{implement_effect, Effect, Script};
-use crate::state::state::State;
+use crate::state::replay::Script;
+use crate::state::state::{Command, State, StateError, Verb};
 
 const HOR_DISPLACE: f32 = 150.;
 const VER_DISPLACE: f32 = 25.;
@@ -129,45 +129,55 @@ async fn draw_map(state: &State, tileset: &Texture2D) {
     }
 }
 
-async fn draw_events(frame_option: &Option<&Vec<Effect>>) {
-    if let Some(&ref frame) = frame_option {
-        for e in frame.iter() {
-            match e.clone() {
-                Effect::Shoot { from, to, damage } => {
-                    draw_line(
-                        HOR_DISPLACE + (16 * from.y) as f32 + 8.0,
-                        VER_DISPLACE + (16 * from.x) as f32 + 8.0,
-                        HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
-                        VER_DISPLACE + (16 * to.x) as f32 + 8.0,
-                        6.0 - (5.0 / (damage as f32)),
-                        RED,
-                    );
-                    draw_circle(
-                        HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
-                        VER_DISPLACE + (16 * to.x) as f32 + 8.0,
-                        12.0 - (11.0 / (damage as f32)),
-                        RED,
-                    );
-                }
-                Effect::Drill { from, to, damage } => {
-                    draw_line(
-                        HOR_DISPLACE + (16 * from.y) as f32 + 8.0,
-                        VER_DISPLACE + (16 * from.x) as f32 + 8.0,
-                        HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
-                        VER_DISPLACE + (16 * to.x) as f32 + 8.0,
-                        6.0 - (3.0 / (damage as f32)),
-                        BLUE,
-                    );
-                    draw_circle(
-                        HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
-                        VER_DISPLACE + (16 * to.x) as f32 + 8.0,
-                        12.0 - (6.0 / (damage as f32)),
-                        BLUE,
-                    );
-                }
-                _ => {}
+async fn draw_command(
+    state: &State,
+    command: &Command,
+) -> Result<(), StateError> {
+    let entity = state.get_entity_by_id(command.entity_id)?;
+    match command.verb.clone() {
+        Verb::Shoot(disp) => {
+            let from = entity.pos;
+            let to = State::add_displace(from, &disp)?;
+            if let Some(damage) = entity.get_gun_damage() {
+                draw_line(
+                    HOR_DISPLACE + (16 * from.y) as f32 + 8.0,
+                    VER_DISPLACE + (16 * from.x) as f32 + 8.0,
+                    HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
+                    VER_DISPLACE + (16 * to.x) as f32 + 8.0,
+                    6.0 - (5.0 / (damage as f32)),
+                    RED,
+                );
+                draw_circle(
+                    HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
+                    VER_DISPLACE + (16 * to.x) as f32 + 8.0,
+                    12.0 - (11.0 / (damage as f32)),
+                    RED,
+                );
             }
+            Ok(())
         }
+        Verb::Drill(dir) => {
+            let from = entity.pos;
+            let to = State::add_displace(from, &dir.into())?;
+            if let Some(damage) = entity.get_gun_damage() {
+                draw_line(
+                    HOR_DISPLACE + (16 * from.y) as f32 + 8.0,
+                    VER_DISPLACE + (16 * from.x) as f32 + 8.0,
+                    HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
+                    VER_DISPLACE + (16 * to.x) as f32 + 8.0,
+                    6.0 - (3.0 / (damage as f32)),
+                    BLUE,
+                );
+                draw_circle(
+                    HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
+                    VER_DISPLACE + (16 * to.x) as f32 + 8.0,
+                    12.0 - (6.0 / (damage as f32)),
+                    BLUE,
+                );
+            }
+            Ok(())
+        }
+        _ => Ok(()),
     }
 }
 
@@ -274,7 +284,6 @@ async fn main() -> std::io::Result<()> {
             }
         }
         draw_map(&state, &tileset).await;
-        draw_events(&script.frames.get(frame_number)).await;
         if is_key_pressed(KeyCode::Escape) | is_key_pressed(KeyCode::Q) {
             break;
         }
@@ -284,8 +293,10 @@ async fn main() -> std::io::Result<()> {
             let frame = &script.frames.get(frame_number);
             if let Some(f) = frame {
                 frame_number += 1;
-                for e in f.iter() {
-                    implement_effect(&mut state, e.clone()).unwrap();
+                for command in f.iter() {
+                    if state.execute_command(command.clone()).is_ok() {
+                        let _ = draw_command(&state, command).await;
+                    }
                 }
             } else {
                 finished = true;

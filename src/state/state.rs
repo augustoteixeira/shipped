@@ -93,6 +93,8 @@ pub enum StateError {
     DisplaceTooFar { disp: Displace },
     #[snafu(display("No entity in {team:?} with template{template}"))]
     NoTemplate { team: Team, template: usize },
+    #[snafu(display("Error implementing effect {:?}", effect))]
+    ImplementationError { effect: Effect },
     #[snafu(display("No entity with id {id}"))]
     NoEntityWithId { id: Id },
     #[snafu(display("Cannot see from {:?} to {:?}", pos, disp))]
@@ -159,15 +161,15 @@ impl State {
         self.next_unique_id += 1;
         Ok(())
     }
-    pub fn construct_creature(
-        &mut self,
-        from: Pos,
-        template: usize,
-        dir: Direction,
-    ) -> Result<(), StateError> {
-        //IMPLEMENT_MATERIAL_SUBTRACTION!!!
-        Ok(())
-    }
+    // pub fn construct_creature(
+    //     &mut self,
+    //     from: Pos,
+    //     template: usize,
+    //     dir: Direction,
+    // ) -> Result<(), StateError> {
+    //     //IMPLEMENT_MATERIAL_SUBTRACTION!!!
+    //     Ok(())
+    // }
     pub fn remove_entity(&mut self, pos: Pos) -> Result<(), StateError> {
         let id = self.tiles[pos.to_index()]
             .entity_id
@@ -312,6 +314,7 @@ impl State {
             disp: disp.clone(),
         })
     }
+
     pub fn execute_command(
         &mut self,
         command: Command,
@@ -394,6 +397,7 @@ impl State {
                 })
             }
             Verb::Construct(index, dir) => {
+                let subtract_the_material_from_entity = 0;
                 let creature = self.get_creature(entity.team, index)?;
                 ensure!(
                     entity.materials >= cost(&creature),
@@ -415,9 +419,15 @@ impl State {
             }
             _ => None,
         };
+        let bring_implementation_code_here = 0;
         if let Some(e) = &effect {
-            if implement_effect(self, e.clone()).is_ok() {
-                return Ok(effect);
+            match implement_effect(self, e.clone()) {
+                Ok(_) => return Ok(effect),
+                Err(_) => {
+                    return Err(StateError::ImplementationError {
+                        effect: e.clone(),
+                    })
+                }
             }
         }
         return Ok(None);

@@ -3,7 +3,7 @@ use snafu::prelude::*;
 
 use super::entity::{Materials, Message, Team};
 use super::geometry::Pos;
-use super::state::{State, StateError};
+use super::state::{Command, State, StateError};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Effect {
@@ -22,6 +22,14 @@ pub struct Construct {
     pub template_index: usize,
     pub builder: Pos,
     pub buildee: Pos,
+}
+
+pub type Frame = Vec<Command>;
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Script {
+    pub genesis: State,
+    pub frames: Vec<Frame>,
 }
 
 #[derive(Debug, Snafu)]
@@ -134,12 +142,4 @@ pub fn implement_effect(
         }
     }
     Ok(())
-}
-
-pub type Frame = Vec<Effect>;
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct Script {
-    pub genesis: State,
-    pub frames: Vec<Frame>,
 }
