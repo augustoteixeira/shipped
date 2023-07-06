@@ -22,3 +22,5 @@ pub struct Blueprint {
 //   all these values should be bigger or equal in b than in a.
 // - perhaps key should be an asset as well, distributed by the level designer and the players
 // - think abou how to create NPC entities.
+
+// implement conversion from two blueprints to one state

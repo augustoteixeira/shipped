@@ -135,13 +135,14 @@ impl Materials {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Abilities<T> {
     pub movement_type: MovementType,
-    pub drill_damage: usize,
     pub gun_damage: usize,
+    pub drill_damage: usize,
     pub brain: T,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Entity<T> {
+    pub tokens: usize,
     pub team: Team,
     pub pos: Pos,
     pub hp: usize,
@@ -210,7 +211,7 @@ pub type BareEntity = Entity<()>;
 pub type HalfEntity = Entity<Half>;
 pub type FullEntity = Entity<Full>;
 
-pub fn weight(body: &Entity<Full>) -> usize {
+pub fn max_weight(body: &Entity<Full>) -> usize {
     let mut result = 0;
     result += body.hp;
     result += body.inventory_size;
@@ -218,7 +219,7 @@ pub fn weight(body: &Entity<Full>) -> usize {
 }
 
 pub fn cost(body: &FullEntity) -> Materials {
-    let w = weight(&body);
+    let w = max_weight(&body);
     let mut result = body.materials.clone();
     result.carbon += body.hp * body.hp;
     result.carbon += body.inventory_size * body.inventory_size;

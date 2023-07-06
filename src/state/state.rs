@@ -10,18 +10,8 @@ use super::geometry::{
     add_displace, is_within_bounds_signed, Direction, Displace, GeometryError,
     Neighbor, Pos,
 };
-use super::replay::{Construct, Effect};
 
 // https://wowpedia.fandom.com/wiki/Warcraft:_Orcs_%26_Humans_missions?file=WarCraft-Orcs%26amp%3BHumans-Orcs-Scenario9-SouthernElwynnForest.png
-
-// pub struct Terrain {
-//     pub walkable: bool,
-//     pub flyable: bool,
-//     pub walking_damage: usize,
-//     pub flying_damage: usize,
-// }
-
-// pub type Geography = [Terrain; WIDTH * HEIGHT];
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Tile {
@@ -29,9 +19,6 @@ pub struct Tile {
     pub entity_id: Option<Id>,
 }
 
-//pub struct Tiles<T, const N: usize>(pub [T; WIDTH * HEIGHT]);
-//pub struct Tiles<const N: usize>(pub [Tile; WIDTH * HEIGHT]);
-//#[serde_with::serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct State {
     codes: [Option<Code>; NUM_CODES],
@@ -93,8 +80,8 @@ pub enum StateError {
     DisplaceTooFar { disp: Displace },
     #[snafu(display("No entity in {team:?} with template{template}"))]
     NoTemplate { team: Team, template: usize },
-    #[snafu(display("Error implementing effect {:?}", effect))]
-    ImplementationError { effect: Effect },
+    // #[snafu(display("Error implementing effect {:?}", effect))]
+    // ImplementationError { effect: Effect },
     #[snafu(display("No entity with id {id}"))]
     NoEntityWithId { id: Id },
     #[snafu(display("Cannot see from {:?} to {:?}", pos, disp))]
@@ -161,15 +148,6 @@ impl State {
         self.next_unique_id += 1;
         Ok(())
     }
-    // pub fn construct_creature(
-    //     &mut self,
-    //     from: Pos,
-    //     template: usize,
-    //     dir: Direction,
-    // ) -> Result<(), StateError> {
-    //     //IMPLEMENT_MATERIAL_SUBTRACTION!!!
-    //     Ok(())
-    // }
     pub fn remove_entity(&mut self, pos: Pos) -> Result<(), StateError> {
         let id = self.tiles[pos.to_index()]
             .entity_id
@@ -326,38 +304,27 @@ impl State {
     pub fn execute_command(
         &mut self,
         command: Command,
-    ) -> Result<Option<Effect>, StateError> {
+    ) -> Result<(), StateError> {
         let entity = self.get_entity_by_id(command.entity_id)?;
         match command.verb {
-            Verb::Wait => return Ok(None),
+            Verb::Wait => return Ok(()),
             Verb::AttemptMove(dir) => {
                 let from = entity.pos.clone();
                 let to = State::add_displace(entity.pos, &Displace::from(dir))?;
                 ensure!(entity.can_move(), NoWalkSnafu { pos: entity.pos },);
                 self.move_entity(from, to)?;
-                return Ok(Some(Effect::EntityMove(from, to)));
             }
             Verb::GetMaterials(neigh, load) => {
                 let to = entity.pos.clone();
                 let from = State::add_displace(entity.pos, &neigh.into())?;
                 ensure!(entity.has_ability(), NoAbilitiesSnafu { pos: to });
                 self.move_material_to_entity(from, to, &load)?;
-                return Ok(Some(Effect::AssetsFloorToEntity {
-                    mat: load,
-                    from,
-                    to,
-                }));
             }
             Verb::DropMaterials(neigh, load) => {
                 let from = entity.pos.clone();
                 let to = State::add_displace(entity.pos, &neigh.into())?;
                 ensure!(entity.has_ability(), NoAbilitiesSnafu { pos: from });
                 self.move_material_to_floor(from, to, &load)?;
-                return Ok(Some(Effect::AssetsEntityToFloor {
-                    mat: load,
-                    from,
-                    to,
-                }));
             }
             Verb::Shoot(disp) => {
                 let from = entity.pos.clone();
@@ -375,7 +342,6 @@ impl State {
                     },
                 )?;
                 self.attack(to, damage)?;
-                return Ok(Some(Effect::Shoot { from, to, damage }));
             }
             Verb::Drill(dir) => {
                 ensure!(
@@ -391,7 +357,6 @@ impl State {
                     },
                 )?;
                 self.attack(to, damage)?;
-                return Ok(Some(Effect::Drill { from, to, damage }));
             }
             Verb::Construct(index, dir) => {
                 let from = entity.pos.clone();
@@ -407,16 +372,9 @@ impl State {
                 let to = State::add_displace(from, &Displace::from(dir))?;
                 let team = entity.team;
                 self.build_entity_from_template(team, index, to)?;
-                return Ok(Some(Effect::Construct(Construct {
-                    team,
-                    template_index: index,
-                    builder: from,
-                    buildee: to,
-                })));
             }
-            _ => {
-                return Ok(None);
-            }
+            _ => {}
         };
+        return Ok(());
     }
 }

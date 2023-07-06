@@ -19,6 +19,7 @@ fn random_entity(rng: &mut ChaCha8Rng, team: Team) -> FullEntity {
     let max_hp = rng.gen_range(1..4);
     let quarter_inventory_size = rng.gen_range(0..10);
     FullEntity {
+        tokens: 0,
         team,
         pos: Pos::new(0, 0),
         hp: rng.gen_range(1..(max_hp + 1)),
