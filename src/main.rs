@@ -3,8 +3,9 @@ extern crate rand_chacha;
 
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-
 use std::collections::HashMap;
+
+pub mod state;
 
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{
@@ -13,8 +14,6 @@ use crate::state::entity::{
 use crate::state::geometry::{Direction, Displace, Neighbor, Pos};
 use crate::state::replay::{Frame, Script};
 use crate::state::state::{Command, State, Tile, Verb};
-
-pub mod state;
 
 fn random_entity(rng: &mut ChaCha8Rng, team: Team) -> FullEntity {
     let max_hp = rng.gen_range(1..4);
@@ -140,37 +139,13 @@ fn main() {
         let mut frame = vec![];
         let id_vec = state.get_entities_ids();
         for id in id_vec {
-            //let entity = state.get_entity_by_id(id).unwrap();
-            //eprintln!("Entity {} at {:?}", id, entity.pos);
-
-            // match validate_command(
-            //     &mut state,
-            //     Command {
-            //         entity_id: id,
-            //         verb: random_verb(&mut rng),
-            //     },
-            // ) {
-
             let command = Command {
                 entity_id: id,
                 verb: random_verb(&mut rng),
             };
-            match state.execute_command(command.clone()) {
-                Ok(Some(_)) => {
-                    //eprintln!("Effect {:?}", e.clone());
-                    //implement_effect(&mut state, e.clone());
-                    frame.push(command.clone());
-                }
-                Ok(None) => {}
-                Err(_e) => { //eprintln! {"Error {:}", e}},
-                }
+            if let Ok(_) = state.execute_command(command.clone()) {
+                frame.push(command.clone());
             }
-
-            // let pos = Pos::new(gen_range(1, 59), gen_range(1, 59));
-            // let new_pos = Pos::new(pos.x + 1, pos.y);
-            // if state.has_entity(pos) & !state.has_entity(new_pos) {
-            //     frame.push(Effect::EntityMove(pos, new_pos));
-            //     break;
         }
         frames.push(frame);
     }

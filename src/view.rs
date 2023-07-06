@@ -1,13 +1,11 @@
 extern crate rand;
 extern crate rand_chacha;
+use macroquad::prelude::*;
 
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-
 use std::fs::File;
 use std::io::prelude::*;
-
-use macroquad::prelude::*;
 
 pub mod state;
 
@@ -30,6 +28,7 @@ fn window_conf() -> Conf {
     }
 }
 
+// TODO: Factor this code
 async fn draw_materials(
     mat: Materials,
     i: usize,
@@ -225,7 +224,6 @@ fn get_texture_x(e: &FullEntity) -> f32 {
         can_drill = a.drill_damage > 0;
         can_shoot = a.gun_damage > 0;
     }
-
     match (inventory, abilities, can_walk, can_drill, can_shoot) {
         (0, false, false, false, false) => 7.0 * 16.0, // wall
         (_, false, false, false, false) => 2.0 * 16.0, // crate
@@ -239,60 +237,64 @@ fn get_texture_x(e: &FullEntity) -> f32 {
     }
 }
 
+async fn draw_floor(tileset: &Texture2D, floor: &[usize; WIDTH * HEIGHT]) {
+    for i in 0..HEIGHT {
+        for j in 0..WIDTH {
+            let f = floor[i * WIDTH + j];
+            let draw_params = DrawTextureParams {
+                source: Some(Rect {
+                    x: 16.0 * (f as f32),
+                    y: 48.0,
+                    w: 16.0,
+                    h: 16.0,
+                }),
+                ..Default::default()
+            };
+            draw_texture_ex(
+                *tileset,
+                HOR_DISPLACE + (16 * j) as f32,
+                VER_DISPLACE + (16 * i) as f32,
+                WHITE,
+                draw_params,
+            );
+        }
+    }
+}
+
 #[macroquad::main(window_conf)]
 async fn main() -> std::io::Result<()> {
     let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(25).try_into().unwrap();
     let tileset = load_texture("assets/tileset.png").await.unwrap();
-
+    // deserialize script
     let mut file = File::open("serialized/script_v1.json")?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
     let script: Script = serde_json::from_str(&contents).unwrap();
-
     let mut state = script.genesis;
-
+    let mut frames = script.frames.into_iter();
+    // time constants
     let mut seconds = get_time();
-    let mut frame_number = 0;
     let mut finished = false;
-
+    // setup floor tiles
     let mut floor = [0; WIDTH * HEIGHT];
     for i in 0..(WIDTH * HEIGHT) {
         floor[i] = rng.gen_range(0..7);
     }
-
+    // main loop
     loop {
-        clear_background(GRAY);
-        for i in 0..HEIGHT {
-            for j in 0..WIDTH {
-                let f = floor[i * WIDTH + j];
-                let draw_params = DrawTextureParams {
-                    source: Some(Rect {
-                        x: 16.0 * (f as f32),
-                        y: 48.0,
-                        w: 16.0,
-                        h: 16.0,
-                    }),
-                    ..Default::default()
-                };
-                draw_texture_ex(
-                    tileset,
-                    HOR_DISPLACE + (16 * j) as f32,
-                    VER_DISPLACE + (16 * i) as f32,
-                    WHITE,
-                    draw_params,
-                );
-            }
-        }
-        draw_map(&state, &tileset).await;
+        // exit logic
         if is_key_pressed(KeyCode::Escape) | is_key_pressed(KeyCode::Q) {
             break;
         }
-
+        // drawing
+        clear_background(GRAY);
+        draw_floor(&tileset, &floor).await;
+        draw_map(&state, &tileset).await;
+        draw_text(format!("FPS: {}", get_fps()).as_str(), 0., 16., 32., WHITE);
+        // update
         if get_time() > seconds + FRAME_TIME {
             seconds += FRAME_TIME;
-            let frame = &script.frames.get(frame_number);
-            if let Some(f) = frame {
-                frame_number += 1;
+            if let Some(f) = frames.next() {
                 for command in f.iter() {
                     if state.execute_command(command.clone()).is_ok() {
                         let _ = draw_command(&state, command).await;
@@ -305,7 +307,6 @@ async fn main() -> std::io::Result<()> {
         if finished {
             draw_rectangle(10., 10., 40.0, 40.0, RED);
         }
-        draw_text(format!("FPS: {}", get_fps()).as_str(), 0., 16., 32., WHITE);
         next_frame().await;
     }
     Ok(())
