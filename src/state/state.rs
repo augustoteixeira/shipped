@@ -5,13 +5,16 @@ use std::cmp::max;
 use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
-use super::entity::{cost, Code, FullEntity, Id, Materials, Message, Team};
+use super::entity::{cost, Code, FullEntity, Message, Team};
 use super::geometry::{
     add_displace, is_within_bounds_signed, Direction, Displace, GeometryError,
     Neighbor, Pos,
 };
+use super::materials::Materials;
 
 // https://wowpedia.fandom.com/wiki/Warcraft:_Orcs_%26_Humans_missions?file=WarCraft-Orcs%26amp%3BHumans-Orcs-Scenario9-SouthernElwynnForest.png
+
+pub type Id = usize;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Tile {
@@ -21,6 +24,9 @@ pub struct Tile {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct State {
+    min_tokens: usize,
+    pub blue_tokens: usize,
+    pub red_tokens: usize,
     codes: [Option<Code>; NUM_CODES],
     pub entities: HashMap<Id, FullEntity>,
     next_unique_id: usize,
@@ -90,6 +96,7 @@ pub enum StateError {
 
 impl State {
     pub fn new(
+        min_tokens: usize,
         codes: [Option<Code>; NUM_CODES],
         entities: HashMap<Id, FullEntity>,
         blue_templates: [Option<FullEntity>; NUM_TEMPLATES],
@@ -100,6 +107,9 @@ impl State {
         assert!(tiles.len() == WIDTH * HEIGHT);
         let next_unique_id = entities.iter().fold(0, |a, (id, _)| max(a, *id));
         State {
+            min_tokens,
+            blue_tokens: 0,
+            red_tokens: 0,
             codes,
             entities,
             next_unique_id,
@@ -137,12 +147,21 @@ impl State {
     pub fn build_entity_from_template(
         &mut self,
         team: Team,
+        ignore_tokens: bool,
         template: usize,
         pos: Pos,
     ) -> Result<(), StateError> {
         ensure!(!self.has_entity(pos), OccupiedTileSnafu { pos });
         let mut entity = self.get_creature(team, template)?;
         entity.pos = pos;
+        if ignore_tokens {
+            entity.tokens = 0;
+        }
+        match team {
+            Team::Blue => self.blue_tokens += entity.tokens,
+            Team::Red => self.red_tokens += entity.tokens,
+            _ => {}
+        };
         self.entities.insert(self.next_unique_id, entity);
         self.tiles[pos.to_index()].entity_id = Some(self.next_unique_id);
         self.next_unique_id += 1;
@@ -152,6 +171,12 @@ impl State {
         let id = self.tiles[pos.to_index()]
             .entity_id
             .ok_or(StateError::EmptyTile { pos })?;
+        let entity = self.get_entity_by_id(id)?;
+        match self.get_entity_by_id(id)?.team {
+            Team::Blue => self.blue_tokens -= entity.tokens,
+            Team::Red => self.red_tokens -= entity.tokens,
+            _ => {}
+        };
         self.entities.remove(&id);
         self.tiles[pos.to_index()].entity_id = None;
         Ok(())
@@ -291,7 +316,7 @@ impl State {
             .abilities
             .as_mut()
             .ok_or(StateError::NoAbilities { pos })?;
-        abilities.brain.message = message.clone();
+        abilities.message = message.clone();
         Ok(())
     }
     pub fn add_displace(pos: Pos, disp: &Displace) -> Result<Pos, StateError> {
@@ -349,7 +374,6 @@ impl State {
                     NoAbilitiesSnafu { pos: entity.pos }
                 );
                 let damage = entity.get_drill_damage().unwrap();
-                let from = entity.pos.clone();
                 let to = add_displace(entity.pos, &dir.into()).context(
                     DisplaceOutOfBoundsSnafu {
                         pos: entity.pos,
@@ -371,7 +395,7 @@ impl State {
                 );
                 let to = State::add_displace(from, &Displace::from(dir))?;
                 let team = entity.team;
-                self.build_entity_from_template(team, index, to)?;
+                self.build_entity_from_template(team, false, index, to)?;
             }
             _ => {}
         };

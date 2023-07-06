@@ -10,8 +10,9 @@ use std::io::prelude::*;
 pub mod state;
 
 use crate::state::constants::{HEIGHT, WIDTH};
-use crate::state::entity::{FullEntity, Materials, MovementType, Team};
+use crate::state::entity::{FullEntity, MovementType, Team};
 use crate::state::geometry::Pos;
+use crate::state::materials::Materials;
 use crate::state::replay::Script;
 use crate::state::state::{Command, State, StateError, Verb};
 
@@ -23,7 +24,7 @@ fn window_conf() -> Conf {
     Conf {
         window_title: "Replay".to_owned(),
         window_height: 1020,
-        window_width: 1300,
+        window_width: 1500,
         ..Default::default()
     }
 }
@@ -31,8 +32,8 @@ fn window_conf() -> Conf {
 // TODO: Factor this code
 async fn draw_materials(
     mat: Materials,
-    i: usize,
     j: usize,
+    i: usize,
     tileset: &Texture2D,
 ) {
     let mut rng =
@@ -139,16 +140,16 @@ async fn draw_command(
             let to = State::add_displace(from, &disp)?;
             if let Some(damage) = entity.get_gun_damage() {
                 draw_line(
-                    HOR_DISPLACE + (16 * from.y) as f32 + 8.0,
-                    VER_DISPLACE + (16 * from.x) as f32 + 8.0,
-                    HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
-                    VER_DISPLACE + (16 * to.x) as f32 + 8.0,
+                    HOR_DISPLACE + (16 * from.x) as f32 + 8.0,
+                    VER_DISPLACE + (16 * from.y) as f32 + 8.0,
+                    HOR_DISPLACE + (16 * to.x) as f32 + 8.0,
+                    VER_DISPLACE + (16 * to.y) as f32 + 8.0,
                     6.0 - (5.0 / (damage as f32)),
                     RED,
                 );
                 draw_circle(
-                    HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
-                    VER_DISPLACE + (16 * to.x) as f32 + 8.0,
+                    HOR_DISPLACE + (16 * to.x) as f32 + 8.0,
+                    VER_DISPLACE + (16 * to.y) as f32 + 8.0,
                     12.0 - (11.0 / (damage as f32)),
                     RED,
                 );
@@ -160,16 +161,16 @@ async fn draw_command(
             let to = State::add_displace(from, &dir.into())?;
             if let Some(damage) = entity.get_gun_damage() {
                 draw_line(
-                    HOR_DISPLACE + (16 * from.y) as f32 + 8.0,
-                    VER_DISPLACE + (16 * from.x) as f32 + 8.0,
-                    HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
-                    VER_DISPLACE + (16 * to.x) as f32 + 8.0,
+                    HOR_DISPLACE + (16 * from.x) as f32 + 8.0,
+                    VER_DISPLACE + (16 * from.y) as f32 + 8.0,
+                    HOR_DISPLACE + (16 * to.x) as f32 + 8.0,
+                    VER_DISPLACE + (16 * to.y) as f32 + 8.0,
                     6.0 - (3.0 / (damage as f32)),
                     BLUE,
                 );
                 draw_circle(
-                    HOR_DISPLACE + (16 * to.y) as f32 + 8.0,
-                    VER_DISPLACE + (16 * to.x) as f32 + 8.0,
+                    HOR_DISPLACE + (16 * to.x) as f32 + 8.0,
+                    VER_DISPLACE + (16 * to.y) as f32 + 8.0,
                     12.0 - (6.0 / (damage as f32)),
                     BLUE,
                 );
@@ -182,8 +183,8 @@ async fn draw_command(
 
 async fn draw_entity(
     entity: Option<&FullEntity>,
-    i: usize,
     j: usize,
+    i: usize,
     tileset: &Texture2D,
 ) {
     if let Some(e) = entity {
@@ -291,6 +292,20 @@ async fn main() -> std::io::Result<()> {
         draw_floor(&tileset, &floor).await;
         draw_map(&state, &tileset).await;
         draw_text(format!("FPS: {}", get_fps()).as_str(), 0., 16., 32., WHITE);
+        draw_text(
+            format!("Blue Tokens: {}", state.blue_tokens).as_str(),
+            1200.,
+            16.,
+            32.,
+            WHITE,
+        );
+        draw_text(
+            format!("Red_Tokens: {}", state.red_tokens).as_str(),
+            1200.,
+            116.,
+            32.,
+            WHITE,
+        );
         // update
         if get_time() > seconds + FRAME_TIME {
             seconds += FRAME_TIME;
