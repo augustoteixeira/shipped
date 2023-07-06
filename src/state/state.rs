@@ -10,7 +10,7 @@ use super::geometry::{
     add_displace, is_within_bounds_signed, Direction, Displace, GeometryError,
     Neighbor, Pos,
 };
-use super::replay::{implement_effect, Construct, Effect};
+use super::replay::{Construct, Effect};
 
 // https://wowpedia.fandom.com/wiki/Warcraft:_Orcs_%26_Humans_missions?file=WarCraft-Orcs%26amp%3BHumans-Orcs-Scenario9-SouthernElwynnForest.png
 
@@ -190,6 +190,14 @@ impl State {
             .get(&id)
             .ok_or(StateError::NoEntityWithId { id })
     }
+    pub fn get_mut_entity_by_id(
+        &mut self,
+        id: Id,
+    ) -> Result<&mut FullEntity, StateError> {
+        self.entities
+            .get_mut(&id)
+            .ok_or(StateError::NoEntityWithId { id })
+    }
     pub fn get_entity_option(&self, pos: Pos) -> Option<&FullEntity> {
         let id = self.get_tile(pos).entity_id;
         match id {
@@ -320,45 +328,39 @@ impl State {
         command: Command,
     ) -> Result<Option<Effect>, StateError> {
         let entity = self.get_entity_by_id(command.entity_id)?;
-        let effect: Option<Effect> = match command.verb {
+        match command.verb {
             Verb::Wait => return Ok(None),
             Verb::AttemptMove(dir) => {
+                let from = entity.pos.clone();
+                let to = State::add_displace(entity.pos, &Displace::from(dir))?;
                 ensure!(entity.can_move(), NoWalkSnafu { pos: entity.pos },);
-                let new_pos =
-                    State::add_displace(entity.pos, &Displace::from(dir))?;
-                ensure!(
-                    !self.has_entity(new_pos),
-                    OccupiedTileSnafu { pos: new_pos }
-                );
-                Some(Effect::EntityMove(entity.pos, new_pos))
+                self.move_entity(from, to)?;
+                return Ok(Some(Effect::EntityMove(from, to)));
             }
-            Verb::GetMaterials(neighbor, mat) => {
-                let floor_pos =
-                    State::add_displace(entity.pos, &neighbor.into())?;
-                ensure!(
-                    entity.has_ability(),
-                    NoAbilitiesSnafu { pos: entity.pos }
-                );
-                Some(Effect::AssetsFloorToEntity {
-                    mat,
-                    from: floor_pos,
-                    to: entity.pos,
-                })
+            Verb::GetMaterials(neigh, load) => {
+                let to = entity.pos.clone();
+                let from = State::add_displace(entity.pos, &neigh.into())?;
+                ensure!(entity.has_ability(), NoAbilitiesSnafu { pos: to });
+                self.move_material_to_entity(from, to, &load)?;
+                return Ok(Some(Effect::AssetsFloorToEntity {
+                    mat: load,
+                    from,
+                    to,
+                }));
             }
-            Verb::DropMaterials(neighbor, mat) => {
-                let floor_pos =
-                    State::add_displace(entity.pos, &neighbor.into())?;
-                ensure!(
-                    entity.has_ability(),
-                    NoAbilitiesSnafu { pos: entity.pos }
-                );
-                Some(Effect::AssetsEntityToFloor {
-                    mat,
-                    from: entity.pos,
-                    to: floor_pos,
-                })
+            Verb::DropMaterials(neigh, load) => {
+                let from = entity.pos.clone();
+                let to = State::add_displace(entity.pos, &neigh.into())?;
+                ensure!(entity.has_ability(), NoAbilitiesSnafu { pos: from });
+                self.move_material_to_floor(from, to, &load)?;
+                return Ok(Some(Effect::AssetsEntityToFloor {
+                    mat: load,
+                    from,
+                    to,
+                }));
             }
             Verb::Shoot(disp) => {
+                let from = entity.pos.clone();
                 ensure!(entity.can_shoot(), NoShootSnafu { pos: entity.pos });
                 ensure!(entity.has_copper(), NoCopperSnafu { pos: entity.pos });
                 let damage = entity.get_gun_damage().unwrap();
@@ -366,17 +368,14 @@ impl State {
                     disp.square_norm() <= 25,
                     DisplaceTooFarSnafu { disp: disp }
                 );
-                let target = self.get_visible(entity.pos, &disp).ok_or(
+                let to = self.get_visible(from, &disp).ok_or(
                     StateError::NotVisible {
-                        pos: entity.pos,
+                        pos: from,
                         disp: disp.clone(),
                     },
                 )?;
-                Some(Effect::Shoot {
-                    from: entity.pos,
-                    to: target,
-                    damage,
-                })
+                self.attack(to, damage)?;
+                return Ok(Some(Effect::Shoot { from, to, damage }));
             }
             Verb::Drill(dir) => {
                 ensure!(
@@ -384,52 +383,40 @@ impl State {
                     NoAbilitiesSnafu { pos: entity.pos }
                 );
                 let damage = entity.get_drill_damage().unwrap();
+                let from = entity.pos.clone();
                 let to = add_displace(entity.pos, &dir.into()).context(
                     DisplaceOutOfBoundsSnafu {
                         pos: entity.pos,
                         disp: dir.clone(),
                     },
                 )?;
-                Some(Effect::Drill {
-                    from: entity.pos,
-                    to,
-                    damage,
-                })
+                self.attack(to, damage)?;
+                return Ok(Some(Effect::Drill { from, to, damage }));
             }
             Verb::Construct(index, dir) => {
+                let from = entity.pos.clone();
                 let subtract_the_material_from_entity = 0;
                 let creature = self.get_creature(entity.team, index)?;
                 ensure!(
                     entity.materials >= cost(&creature),
                     NoMaterialEntitySnafu {
-                        pos: entity.pos,
+                        pos: from,
                         load: cost(&creature)
                     }
                 );
-                let creature_pos =
-                    State::add_displace(entity.pos, &Displace::from(dir))?;
-                let entity_pos = entity.pos;
+                let to = State::add_displace(from, &Displace::from(dir))?;
                 let team = entity.team;
-                Some(Effect::Construct(Construct {
+                self.build_entity_from_template(team, index, to)?;
+                return Ok(Some(Effect::Construct(Construct {
                     team,
                     template_index: index,
-                    builder: entity_pos,
-                    buildee: creature_pos,
-                }))
+                    builder: from,
+                    buildee: to,
+                })));
             }
-            _ => None,
+            _ => {
+                return Ok(None);
+            }
         };
-        let bring_implementation_code_here = 0;
-        if let Some(e) = &effect {
-            match implement_effect(self, e.clone()) {
-                Ok(_) => return Ok(effect),
-                Err(_) => {
-                    return Err(StateError::ImplementationError {
-                        effect: e.clone(),
-                    })
-                }
-            }
-        }
-        return Ok(None);
     }
 }
