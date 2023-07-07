@@ -5,23 +5,16 @@ use std::cmp::max;
 use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
-use super::entity::{cost, Code, FullEntity, Id, Materials, Message, Team};
+use super::entity::{cost, Code, FullEntity, Message, Team};
 use super::geometry::{
     add_displace, is_within_bounds_signed, Direction, Displace, GeometryError,
     Neighbor, Pos,
 };
-use super::replay::{Construct, Effect};
+use super::materials::Materials;
 
 // https://wowpedia.fandom.com/wiki/Warcraft:_Orcs_%26_Humans_missions?file=WarCraft-Orcs%26amp%3BHumans-Orcs-Scenario9-SouthernElwynnForest.png
 
-// pub struct Terrain {
-//     pub walkable: bool,
-//     pub flyable: bool,
-//     pub walking_damage: usize,
-//     pub flying_damage: usize,
-// }
-
-// pub type Geography = [Terrain; WIDTH * HEIGHT];
+pub type Id = usize;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Tile {
@@ -29,11 +22,11 @@ pub struct Tile {
     pub entity_id: Option<Id>,
 }
 
-//pub struct Tiles<T, const N: usize>(pub [T; WIDTH * HEIGHT]);
-//pub struct Tiles<const N: usize>(pub [Tile; WIDTH * HEIGHT]);
-//#[serde_with::serde_as]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct State {
+    min_tokens: usize,
+    pub blue_tokens: usize,
+    pub red_tokens: usize,
     codes: [Option<Code>; NUM_CODES],
     pub entities: HashMap<Id, FullEntity>,
     next_unique_id: usize,
@@ -93,8 +86,8 @@ pub enum StateError {
     DisplaceTooFar { disp: Displace },
     #[snafu(display("No entity in {team:?} with template{template}"))]
     NoTemplate { team: Team, template: usize },
-    #[snafu(display("Error implementing effect {:?}", effect))]
-    ImplementationError { effect: Effect },
+    // #[snafu(display("Error implementing effect {:?}", effect))]
+    // ImplementationError { effect: Effect },
     #[snafu(display("No entity with id {id}"))]
     NoEntityWithId { id: Id },
     #[snafu(display("Cannot see from {:?} to {:?}", pos, disp))]
@@ -103,6 +96,7 @@ pub enum StateError {
 
 impl State {
     pub fn new(
+        min_tokens: usize,
         codes: [Option<Code>; NUM_CODES],
         entities: HashMap<Id, FullEntity>,
         blue_templates: [Option<FullEntity>; NUM_TEMPLATES],
@@ -113,6 +107,9 @@ impl State {
         assert!(tiles.len() == WIDTH * HEIGHT);
         let next_unique_id = entities.iter().fold(0, |a, (id, _)| max(a, *id));
         State {
+            min_tokens,
+            blue_tokens: 0,
+            red_tokens: 0,
             codes,
             entities,
             next_unique_id,
@@ -150,30 +147,36 @@ impl State {
     pub fn build_entity_from_template(
         &mut self,
         team: Team,
+        ignore_tokens: bool,
         template: usize,
         pos: Pos,
     ) -> Result<(), StateError> {
         ensure!(!self.has_entity(pos), OccupiedTileSnafu { pos });
         let mut entity = self.get_creature(team, template)?;
         entity.pos = pos;
+        if ignore_tokens {
+            entity.tokens = 0;
+        }
+        match team {
+            Team::Blue => self.blue_tokens += entity.tokens,
+            Team::Red => self.red_tokens += entity.tokens,
+            _ => {}
+        };
         self.entities.insert(self.next_unique_id, entity);
         self.tiles[pos.to_index()].entity_id = Some(self.next_unique_id);
         self.next_unique_id += 1;
         Ok(())
     }
-    // pub fn construct_creature(
-    //     &mut self,
-    //     from: Pos,
-    //     template: usize,
-    //     dir: Direction,
-    // ) -> Result<(), StateError> {
-    //     //IMPLEMENT_MATERIAL_SUBTRACTION!!!
-    //     Ok(())
-    // }
     pub fn remove_entity(&mut self, pos: Pos) -> Result<(), StateError> {
         let id = self.tiles[pos.to_index()]
             .entity_id
             .ok_or(StateError::EmptyTile { pos })?;
+        let entity = self.get_entity_by_id(id)?;
+        match self.get_entity_by_id(id)?.team {
+            Team::Blue => self.blue_tokens -= entity.tokens,
+            Team::Red => self.red_tokens -= entity.tokens,
+            _ => {}
+        };
         self.entities.remove(&id);
         self.tiles[pos.to_index()].entity_id = None;
         Ok(())
@@ -313,7 +316,7 @@ impl State {
             .abilities
             .as_mut()
             .ok_or(StateError::NoAbilities { pos })?;
-        abilities.brain.message = message.clone();
+        abilities.message = message.clone();
         Ok(())
     }
     pub fn add_displace(pos: Pos, disp: &Displace) -> Result<Pos, StateError> {
@@ -326,38 +329,27 @@ impl State {
     pub fn execute_command(
         &mut self,
         command: Command,
-    ) -> Result<Option<Effect>, StateError> {
+    ) -> Result<(), StateError> {
         let entity = self.get_entity_by_id(command.entity_id)?;
         match command.verb {
-            Verb::Wait => return Ok(None),
+            Verb::Wait => return Ok(()),
             Verb::AttemptMove(dir) => {
                 let from = entity.pos.clone();
                 let to = State::add_displace(entity.pos, &Displace::from(dir))?;
                 ensure!(entity.can_move(), NoWalkSnafu { pos: entity.pos },);
                 self.move_entity(from, to)?;
-                return Ok(Some(Effect::EntityMove(from, to)));
             }
             Verb::GetMaterials(neigh, load) => {
                 let to = entity.pos.clone();
                 let from = State::add_displace(entity.pos, &neigh.into())?;
                 ensure!(entity.has_ability(), NoAbilitiesSnafu { pos: to });
                 self.move_material_to_entity(from, to, &load)?;
-                return Ok(Some(Effect::AssetsFloorToEntity {
-                    mat: load,
-                    from,
-                    to,
-                }));
             }
             Verb::DropMaterials(neigh, load) => {
                 let from = entity.pos.clone();
                 let to = State::add_displace(entity.pos, &neigh.into())?;
                 ensure!(entity.has_ability(), NoAbilitiesSnafu { pos: from });
                 self.move_material_to_floor(from, to, &load)?;
-                return Ok(Some(Effect::AssetsEntityToFloor {
-                    mat: load,
-                    from,
-                    to,
-                }));
             }
             Verb::Shoot(disp) => {
                 let from = entity.pos.clone();
@@ -375,7 +367,6 @@ impl State {
                     },
                 )?;
                 self.attack(to, damage)?;
-                return Ok(Some(Effect::Shoot { from, to, damage }));
             }
             Verb::Drill(dir) => {
                 ensure!(
@@ -383,7 +374,6 @@ impl State {
                     NoAbilitiesSnafu { pos: entity.pos }
                 );
                 let damage = entity.get_drill_damage().unwrap();
-                let from = entity.pos.clone();
                 let to = add_displace(entity.pos, &dir.into()).context(
                     DisplaceOutOfBoundsSnafu {
                         pos: entity.pos,
@@ -391,7 +381,6 @@ impl State {
                     },
                 )?;
                 self.attack(to, damage)?;
-                return Ok(Some(Effect::Drill { from, to, damage }));
             }
             Verb::Construct(index, dir) => {
                 let from = entity.pos.clone();
@@ -406,17 +395,10 @@ impl State {
                 );
                 let to = State::add_displace(from, &Displace::from(dir))?;
                 let team = entity.team;
-                self.build_entity_from_template(team, index, to)?;
-                return Ok(Some(Effect::Construct(Construct {
-                    team,
-                    template_index: index,
-                    builder: from,
-                    buildee: to,
-                })));
+                self.build_entity_from_template(team, false, index, to)?;
             }
-            _ => {
-                return Ok(None);
-            }
+            _ => {}
         };
+        return Ok(());
     }
 }
