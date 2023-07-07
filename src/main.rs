@@ -106,6 +106,7 @@ fn main() {
     let mut initial_state = State::new(
         10,
         std::array::from_fn(|_| None),
+        std::array::from_fn(|_| None),
         HashMap::new(),
         std::array::from_fn(|_| Some(random_entity(&mut rng, Team::Blue))),
         std::array::from_fn(|_| Some(random_entity(&mut rng, Team::Gray))),
@@ -137,7 +138,7 @@ fn main() {
             if initial_state
                 .build_entity_from_template(
                     Team::Gray,
-                    true,
+                    false,
                     template,
                     Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
                 )
@@ -154,7 +155,7 @@ fn main() {
             if initial_state
                 .build_entity_from_template(
                     Team::Blue,
-                    true,
+                    false,
                     template,
                     Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
                 )
@@ -173,7 +174,7 @@ fn main() {
             if initial_state
                 .build_entity_from_template(
                     Team::Red,
-                    true,
+                    false,
                     template,
                     Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
                 )

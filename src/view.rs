@@ -14,7 +14,7 @@ use crate::state::entity::{FullEntity, MovementType, Team};
 use crate::state::geometry::Pos;
 use crate::state::materials::Materials;
 use crate::state::replay::Script;
-use crate::state::state::{Command, State, StateError, Verb};
+use crate::state::state::{Command, GameStatus, State, StateError, Verb};
 
 const HOR_DISPLACE: f32 = 150.;
 const VER_DISPLACE: f32 = 25.;
@@ -307,7 +307,9 @@ async fn main() -> std::io::Result<()> {
             WHITE,
         );
         // update
-        if get_time() > seconds + FRAME_TIME {
+        if (get_time() > seconds + FRAME_TIME)
+            & (state.game_status == GameStatus::Running)
+        {
             seconds += FRAME_TIME;
             if let Some(f) = frames.next() {
                 for command in f.iter() {
@@ -320,6 +322,12 @@ async fn main() -> std::io::Result<()> {
             }
         }
         if finished {
+            draw_rectangle(10., 10., 40.0, 40.0, GRAY);
+        }
+        if (state.game_status == GameStatus::BlueWon) {
+            draw_rectangle(10., 10., 40.0, 40.0, BLUE);
+        }
+        if (state.game_status == GameStatus::RedWon) {
             draw_rectangle(10., 10., 40.0, 40.0, RED);
         }
         next_frame().await;

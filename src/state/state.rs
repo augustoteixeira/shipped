@@ -22,12 +22,21 @@ pub struct Tile {
     pub entity_id: Option<Id>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub enum GameStatus {
+    Running,
+    BlueWon,
+    RedWon,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct State {
+    pub game_status: GameStatus,
     min_tokens: usize,
     pub blue_tokens: usize,
     pub red_tokens: usize,
-    codes: [Option<Code>; NUM_CODES],
+    blue_codes: [Option<Code>; NUM_CODES],
+    red_codes: [Option<Code>; NUM_CODES],
     pub entities: HashMap<Id, FullEntity>,
     next_unique_id: usize,
     blue_templates: [Option<FullEntity>; NUM_TEMPLATES],
@@ -97,7 +106,8 @@ pub enum StateError {
 impl State {
     pub fn new(
         min_tokens: usize,
-        codes: [Option<Code>; NUM_CODES],
+        blue_codes: [Option<Code>; NUM_CODES],
+        red_codes: [Option<Code>; NUM_CODES],
         entities: HashMap<Id, FullEntity>,
         blue_templates: [Option<FullEntity>; NUM_TEMPLATES],
         gray_templates: [Option<FullEntity>; NUM_TEMPLATES],
@@ -107,10 +117,12 @@ impl State {
         assert!(tiles.len() == WIDTH * HEIGHT);
         let next_unique_id = entities.iter().fold(0, |a, (id, _)| max(a, *id));
         State {
+            game_status: GameStatus::Running,
             min_tokens,
             blue_tokens: 0,
             red_tokens: 0,
-            codes,
+            blue_codes,
+            red_codes,
             entities,
             next_unique_id,
             blue_templates,
@@ -167,6 +179,27 @@ impl State {
         self.next_unique_id += 1;
         Ok(())
     }
+    pub fn construct_entity(
+        &mut self,
+        entity_id: usize,
+        team: Team,
+        creature: FullEntity,
+        template: usize,
+        pos: Pos,
+    ) -> Result<(), StateError> {
+        ensure!(!self.has_entity(pos), OccupiedTileSnafu { pos: pos });
+        let entity = self.get_mut_entity_by_id(entity_id)?;
+        let constr_cost = cost(&creature);
+        ensure!(
+            entity.materials >= constr_cost,
+            NoMaterialEntitySnafu {
+                pos: entity.pos,
+                load: constr_cost,
+            }
+        );
+        entity.materials -= constr_cost;
+        self.build_entity_from_template(team, true, template, pos)
+    }
     pub fn remove_entity(&mut self, pos: Pos) -> Result<(), StateError> {
         let id = self.tiles[pos.to_index()]
             .entity_id
@@ -176,6 +209,12 @@ impl State {
             Team::Blue => self.blue_tokens -= entity.tokens,
             Team::Red => self.red_tokens -= entity.tokens,
             _ => {}
+        };
+        if self.blue_tokens < self.min_tokens {
+            self.game_status = GameStatus::RedWon
+        };
+        if self.red_tokens < self.min_tokens {
+            self.game_status = GameStatus::BlueWon
         };
         self.entities.remove(&id);
         self.tiles[pos.to_index()].entity_id = None;
@@ -330,6 +369,9 @@ impl State {
         &mut self,
         command: Command,
     ) -> Result<(), StateError> {
+        if self.game_status != GameStatus::Running {
+            return Ok(());
+        }
         let entity = self.get_entity_by_id(command.entity_id)?;
         match command.verb {
             Verb::Wait => return Ok(()),
@@ -382,20 +424,18 @@ impl State {
                 )?;
                 self.attack(to, damage)?;
             }
-            Verb::Construct(index, dir) => {
+            Verb::Construct(template, dir) => {
                 let from = entity.pos.clone();
-                let subtract_the_material_from_entity = 0;
-                let creature = self.get_creature(entity.team, index)?;
-                ensure!(
-                    entity.materials >= cost(&creature),
-                    NoMaterialEntitySnafu {
-                        pos: from,
-                        load: cost(&creature)
-                    }
-                );
-                let to = State::add_displace(from, &Displace::from(dir))?;
+                let creature = self.get_creature(entity.team, template)?;
                 let team = entity.team;
-                self.build_entity_from_template(team, false, index, to)?;
+                let pos = State::add_displace(from, &Displace::from(dir))?;
+                self.construct_entity(
+                    command.entity_id,
+                    team,
+                    creature,
+                    template,
+                    pos,
+                )?;
             }
             _ => {}
         };
