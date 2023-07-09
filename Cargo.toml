@@ -24,3 +24,7 @@ path = "src/main.rs"
 [[bin]]
 name = "view"
 path = "src/view.rs"
+
+[[bin]]
+name = "gui"
+path = "src/gui.rs"

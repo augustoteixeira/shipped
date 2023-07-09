@@ -162,7 +162,7 @@ impl State {
         pos: Pos,
     ) -> Result<(), StateError> {
         ensure!(!self.has_entity(pos), OccupiedTileSnafu { pos });
-        let mut entity = self
+        let entity = self
             .get_creature(team, template)
             .map(|t| t.upgrade(tokens, team, pos))?;
         match team {
@@ -424,7 +424,6 @@ impl State {
             }
             Verb::Construct(template, dir) => {
                 let from = entity.pos.clone();
-                let team = entity.team;
                 let pos = State::add_displace(from, &Displace::from(dir))?;
                 let creature = self
                     .get_creature(entity.team, template)

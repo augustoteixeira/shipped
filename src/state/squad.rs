@@ -3,7 +3,7 @@ use snafu::prelude::*;
 use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
-use super::entity::{Code, Entity, Team, TemplateEntity};
+use super::entity::{Code, Team, TemplateEntity};
 use super::geometry::Pos;
 use super::materials::Materials;
 use super::state::{State, StateError, Tile};

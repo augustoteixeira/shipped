@@ -3,18 +3,17 @@ extern crate rand_chacha;
 
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-use std::collections::HashMap;
 
 pub mod state;
 
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{
-    Abilities, Full, FullEntity, Message, MovementType, Team, TemplateEntity,
+    Abilities, Full, Message, MovementType, Team, TemplateEntity,
 };
 use crate::state::geometry::{Direction, Displace, Neighbor, Pos};
 use crate::state::materials::Materials;
 use crate::state::squad::{build_state, Placement, Settings, Squad};
-use crate::state::state::{Command, Frame, Script, State, Tile, Verb};
+use crate::state::state::{Command, Frame, Script, Tile, Verb};
 
 fn random_entity(rng: &mut ChaCha8Rng) -> TemplateEntity {
     let quarter_inventory_size = rng.gen_range(0..10);
