@@ -9,19 +9,16 @@ pub mod state;
 
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{
-    Abilities, Full, FullEntity, Message, MovementType, Team,
+    Abilities, Full, FullEntity, Message, MovementType, Team, TemplateEntity,
 };
 use crate::state::geometry::{Direction, Displace, Neighbor, Pos};
 use crate::state::materials::Materials;
-use crate::state::replay::{Frame, Script};
-use crate::state::state::{Command, State, Tile, Verb};
+use crate::state::squad::{build_state, Placement, Settings, Squad};
+use crate::state::state::{Command, Frame, Script, State, Tile, Verb};
 
-fn random_entity(rng: &mut ChaCha8Rng, team: Team) -> FullEntity {
+fn random_entity(rng: &mut ChaCha8Rng) -> TemplateEntity {
     let quarter_inventory_size = rng.gen_range(0..10);
-    FullEntity {
-        tokens: 1,
-        team,
-        pos: Pos::new(0, 0),
+    TemplateEntity {
         hp: rng.gen_range(1..4),
         inventory_size: 4 * quarter_inventory_size,
         materials: Materials {
@@ -100,90 +97,72 @@ fn random_verb(rng: &mut ChaCha8Rng) -> Verb {
     }
 }
 
+fn random_squad(mut rng: &mut ChaCha8Rng, team: Team) -> Squad {
+    let mut occupied = [false; WIDTH * HEIGHT];
+    let mut placements = vec![];
+    let mut pos;
+    for _ in 0..40 {
+        let template = rng.gen_range(0..NUM_TEMPLATES);
+        loop {
+            let y = rng.gen_range(0..HEIGHT / 2)
+                + if team == Team::Red { HEIGHT / 2 } else { 0 };
+            pos = Pos::new(rng.gen_range(0..WIDTH), y);
+            if !occupied[pos.to_index()] {
+                break;
+            }
+        }
+        occupied[pos.to_index()] = true;
+        placements.push(Placement {
+            template,
+            pos,
+            grayed: false,
+        });
+    }
+    for _ in 0..10 {
+        let template = rng.gen_range(0..NUM_TEMPLATES);
+        loop {
+            let y = rng.gen_range(0..HEIGHT / 2)
+                + if team == Team::Red { HEIGHT / 2 } else { 0 };
+            pos = Pos::new(rng.gen_range(0..WIDTH), y);
+            if !occupied[pos.to_index()] {
+                break;
+            }
+        }
+        occupied[pos.to_index()] = true;
+        placements.push(Placement {
+            template,
+            pos,
+            grayed: true,
+        });
+    }
+    Squad {
+        codes: std::array::from_fn(|_| None),
+        templates: std::array::from_fn(|_| Some(random_entity(&mut rng))),
+        placements,
+    }
+}
+
 fn main() {
     let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(17).try_into().unwrap();
-
-    let mut initial_state = State::new(
-        10,
-        std::array::from_fn(|_| None),
-        std::array::from_fn(|_| None),
-        HashMap::new(),
-        std::array::from_fn(|_| Some(random_entity(&mut rng, Team::Blue))),
-        std::array::from_fn(|_| Some(random_entity(&mut rng, Team::Gray))),
-        std::array::from_fn(|_| Some(random_entity(&mut rng, Team::Red))),
-        (0..(WIDTH * HEIGHT))
-            .map(|_| Tile {
-                entity_id: None,
-                materials: Materials {
-                    carbon: rng.gen_range(0..20) / 13,
-                    silicon: rng.gen_range(0..20) / 13,
-                    plutonium: rng.gen_range(0..20) / 13,
-                    copper: rng.gen_range(0..20) / 13,
-                },
-            })
-            .collect(),
-    );
-    for _ in 0..20 {
-        // gray team
-        loop {
-            let template = rng.gen_range(0..NUM_TEMPLATES);
-            let pos =
-                Pos::new(rng.gen_range(0..WIDTH), rng.gen_range(0..HEIGHT));
-            let _ = initial_state.build_entity_from_template(
-                Team::Gray,
-                true,
-                template,
-                pos,
-            );
-            if initial_state
-                .build_entity_from_template(
-                    Team::Gray,
-                    false,
-                    template,
-                    Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
-                )
-                .is_ok()
-            {
-                break;
-            };
-        }
-        // blue team
-        loop {
-            let template = rng.gen_range(0..NUM_TEMPLATES);
-            let pos =
-                Pos::new(rng.gen_range(0..WIDTH), rng.gen_range(0..HEIGHT / 2));
-            if initial_state
-                .build_entity_from_template(
-                    Team::Blue,
-                    false,
-                    template,
-                    Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
-                )
-                .is_ok()
-            {
-                break;
-            };
-        }
-        // red team
-        loop {
-            let template = rng.gen_range(0..NUM_TEMPLATES);
-            let pos = Pos::new(
-                rng.gen_range(0..WIDTH),
-                rng.gen_range((HEIGHT / 2)..HEIGHT),
-            );
-            if initial_state
-                .build_entity_from_template(
-                    Team::Red,
-                    false,
-                    template,
-                    Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
-                )
-                .is_ok()
-            {
-                break;
-            };
-        }
-    }
+    let initial_state = build_state(
+        random_squad(&mut rng, Team::Blue),
+        random_squad(&mut rng, Team::Red),
+        Settings {
+            min_tokens: 15,
+            tiles: (0..(WIDTH * HEIGHT))
+                .map(|_| Tile {
+                    entity_id: None,
+                    materials: Materials {
+                        carbon: rng.gen_range(0..20) / 13,
+                        silicon: rng.gen_range(0..20) / 13,
+                        plutonium: rng.gen_range(0..20) / 13,
+                        copper: rng.gen_range(0..20) / 13,
+                    },
+                })
+                .collect(),
+        },
+    )
+    .unwrap();
     let mut state = initial_state.clone();
     let mut frames: Vec<Frame> = vec![];
     for _ in 1..1000 {

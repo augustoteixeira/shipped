@@ -25,11 +25,12 @@ pub struct Abilities<T> {
     pub brain: T,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum Team {
     Blue,
-    Gray,
+    BlueGray,
     Red,
+    RedGray,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -94,6 +95,28 @@ pub struct Full {
 pub type BareEntity = Entity<()>;
 pub type HalfEntity = Entity<Half>;
 pub type FullEntity = Entity<Full>;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TemplateEntity {
+    pub hp: usize,
+    pub inventory_size: usize,
+    pub materials: Materials,
+    pub abilities: Option<Abilities<Full>>,
+}
+
+impl TemplateEntity {
+    pub fn upgrade(self, tokens: usize, team: Team, pos: Pos) -> FullEntity {
+        FullEntity {
+            tokens,
+            team,
+            pos,
+            hp: self.hp,
+            inventory_size: self.inventory_size,
+            materials: self.materials,
+            abilities: self.abilities,
+        }
+    }
+}
 
 pub fn max_weight(body: &FullEntity) -> usize {
     let mut result = 0;

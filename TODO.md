@@ -1,10 +1,3 @@
-State + Viewer
---------------
-
-- implement construction
-- implement victory
-- make a type for the board preparation and a function to execute the board
-
 Add Coding
 ----------
 
@@ -13,5 +6,12 @@ Add Coding
 - wasmer with no gas
 - add gas
 
-Add Level Editor
-----------------
+UI
+--
+
+- make view.rs calculate all moves (instead of main)
+- send view to ui crate
+- finish squad functionality
+- add initial screen and the necessary screens to get to view a game saved between two squads in json
+
+- make a type for the board preparation and a function to execute the board

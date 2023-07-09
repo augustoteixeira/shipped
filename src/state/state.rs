@@ -5,7 +5,7 @@ use std::cmp::max;
 use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
-use super::entity::{cost, Code, FullEntity, Message, Team};
+use super::entity::{cost, Code, FullEntity, Message, Team, TemplateEntity};
 use super::geometry::{
     add_displace, is_within_bounds_signed, Direction, Displace, GeometryError,
     Neighbor, Pos,
@@ -32,16 +32,15 @@ pub enum GameStatus {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct State {
     pub game_status: GameStatus,
-    min_tokens: usize,
+    pub min_tokens: usize,
     pub blue_tokens: usize,
     pub red_tokens: usize,
     blue_codes: [Option<Code>; NUM_CODES],
     red_codes: [Option<Code>; NUM_CODES],
     pub entities: HashMap<Id, FullEntity>,
     next_unique_id: usize,
-    blue_templates: [Option<FullEntity>; NUM_TEMPLATES],
-    gray_templates: [Option<FullEntity>; NUM_TEMPLATES],
-    red_templates: [Option<FullEntity>; NUM_TEMPLATES],
+    blue_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
+    red_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
     pub tiles: Vec<Tile>,
 }
 
@@ -109,9 +108,8 @@ impl State {
         blue_codes: [Option<Code>; NUM_CODES],
         red_codes: [Option<Code>; NUM_CODES],
         entities: HashMap<Id, FullEntity>,
-        blue_templates: [Option<FullEntity>; NUM_TEMPLATES],
-        gray_templates: [Option<FullEntity>; NUM_TEMPLATES],
-        red_templates: [Option<FullEntity>; NUM_TEMPLATES],
+        blue_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
+        red_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
         tiles: Vec<Tile>,
     ) -> Self {
         assert!(tiles.len() == WIDTH * HEIGHT);
@@ -126,7 +124,6 @@ impl State {
             entities,
             next_unique_id,
             blue_templates,
-            gray_templates,
             red_templates,
             tiles,
         }
@@ -144,31 +141,30 @@ impl State {
         &self,
         team: Team,
         template: usize,
-    ) -> Result<FullEntity, StateError> {
+    ) -> Result<TemplateEntity, StateError> {
         ensure!(
             template < NUM_TEMPLATES,
             TemplateOutOfBoundsSnafu { template }
         );
         match team {
-            Team::Blue => self.blue_templates[template].clone(),
-            Team::Gray => self.gray_templates[template].clone(),
-            Team::Red => self.red_templates[template].clone(),
+            Team::Blue | Team::BlueGray => {
+                self.blue_templates[template].clone()
+            }
+            Team::Red | Team::RedGray => self.red_templates[template].clone(),
         }
         .ok_or(StateError::NoTemplate { team, template })
     }
     pub fn build_entity_from_template(
         &mut self,
         team: Team,
-        ignore_tokens: bool,
+        tokens: usize,
         template: usize,
         pos: Pos,
     ) -> Result<(), StateError> {
         ensure!(!self.has_entity(pos), OccupiedTileSnafu { pos });
-        let mut entity = self.get_creature(team, template)?;
-        entity.pos = pos;
-        if ignore_tokens {
-            entity.tokens = 0;
-        }
+        let mut entity = self
+            .get_creature(team, template)
+            .map(|t| t.upgrade(tokens, team, pos))?;
         match team {
             Team::Blue => self.blue_tokens += entity.tokens,
             Team::Red => self.red_tokens += entity.tokens,
@@ -182,12 +178,13 @@ impl State {
     pub fn construct_entity(
         &mut self,
         entity_id: usize,
-        team: Team,
         creature: FullEntity,
         template: usize,
-        pos: Pos,
     ) -> Result<(), StateError> {
-        ensure!(!self.has_entity(pos), OccupiedTileSnafu { pos: pos });
+        ensure!(
+            !self.has_entity(creature.pos),
+            OccupiedTileSnafu { pos: creature.pos }
+        );
         let entity = self.get_mut_entity_by_id(entity_id)?;
         let constr_cost = cost(&creature);
         ensure!(
@@ -198,7 +195,8 @@ impl State {
             }
         );
         entity.materials -= constr_cost;
-        self.build_entity_from_template(team, true, template, pos)
+        let team = entity.team;
+        self.build_entity_from_template(team, 0, template, creature.pos)
     }
     pub fn remove_entity(&mut self, pos: Pos) -> Result<(), StateError> {
         let id = self.tiles[pos.to_index()]
@@ -426,19 +424,23 @@ impl State {
             }
             Verb::Construct(template, dir) => {
                 let from = entity.pos.clone();
-                let creature = self.get_creature(entity.team, template)?;
                 let team = entity.team;
                 let pos = State::add_displace(from, &Displace::from(dir))?;
-                self.construct_entity(
-                    command.entity_id,
-                    team,
-                    creature,
-                    template,
-                    pos,
-                )?;
+                let creature = self
+                    .get_creature(entity.team, template)
+                    .map(|t| t.upgrade(0, entity.team, pos))?;
+                self.construct_entity(command.entity_id, creature, template)?;
             }
             _ => {}
         };
         return Ok(());
     }
+}
+
+pub type Frame = Vec<Command>;
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Script {
+    pub genesis: State,
+    pub frames: Vec<Frame>,
 }

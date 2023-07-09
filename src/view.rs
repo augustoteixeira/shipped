@@ -13,8 +13,9 @@ use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::{FullEntity, MovementType, Team};
 use crate::state::geometry::Pos;
 use crate::state::materials::Materials;
-use crate::state::replay::Script;
-use crate::state::state::{Command, GameStatus, State, StateError, Verb};
+use crate::state::state::{
+    Command, GameStatus, Script, State, StateError, Verb,
+};
 
 const HOR_DISPLACE: f32 = 150.;
 const VER_DISPLACE: f32 = 25.;
@@ -190,7 +191,7 @@ async fn draw_entity(
     if let Some(e) = entity {
         let x = get_texture_x(&e);
         let y = match e.team {
-            Team::Gray => 0.0,
+            Team::BlueGray | Team::RedGray => 0.0,
             Team::Blue => 16.0,
             Team::Red => 32.0,
         };
@@ -210,6 +211,15 @@ async fn draw_entity(
             WHITE,
             draw_params,
         );
+        if e.tokens > 0 {
+            draw_rectangle(
+                HOR_DISPLACE + (j as f32) * 16.,
+                VER_DISPLACE + (i as f32) * 16.,
+                2.0,
+                2.0,
+                LIGHTGRAY,
+            );
+        }
     }
 }
 
@@ -306,6 +316,14 @@ async fn main() -> std::io::Result<()> {
             32.,
             WHITE,
         );
+        draw_text(
+            format!("St: {:?}, min {}", state.game_status, state.min_tokens)
+                .as_str(),
+            1200.,
+            216.,
+            32.,
+            WHITE,
+        );
         // update
         if (get_time() > seconds + FRAME_TIME)
             & (state.game_status == GameStatus::Running)
@@ -322,13 +340,13 @@ async fn main() -> std::io::Result<()> {
             }
         }
         if finished {
-            draw_rectangle(10., 10., 40.0, 40.0, GRAY);
+            draw_rectangle(10., 40., 40.0, 40.0, BLACK);
         }
-        if (state.game_status == GameStatus::BlueWon) {
-            draw_rectangle(10., 10., 40.0, 40.0, BLUE);
+        if state.game_status == GameStatus::BlueWon {
+            draw_rectangle(10., 40., 40.0, 40.0, BLUE);
         }
-        if (state.game_status == GameStatus::RedWon) {
-            draw_rectangle(10., 10., 40.0, 40.0, RED);
+        if state.game_status == GameStatus::RedWon {
+            draw_rectangle(10., 40., 40.0, 40.0, RED);
         }
         next_frame().await;
     }
