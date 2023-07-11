@@ -18,13 +18,14 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+    let landing = Landing::new();
     loop {
         clear_background(RED);
 
-        Landing::draw(0.0, 0.0, WIN_WIDTH, WIN_HEIGHT, ()).await;
+        landing.draw().await;
 
         if let Some(input) = get_input() {
-            match Landing::get_command(WIN_WIDTH, WIN_HEIGHT, (), input) {
+            match landing.get_command(input) {
                 LandingCommand::Exit => {
                     break;
                 }
