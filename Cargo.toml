@@ -16,6 +16,7 @@ serde_json = { version = "1.0" }
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 line_drawing = "1.0.0"
+init_array = "0.3.0"
 
 [[bin]]
 name = "main"

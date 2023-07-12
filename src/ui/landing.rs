@@ -2,7 +2,7 @@ use async_trait::async_trait;
 
 use super::ui::{Button, Grid, Input, Rect, Ui};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum Selection {
     LoadBF,
     _CreateBF,
@@ -10,7 +10,7 @@ enum Selection {
 }
 
 pub struct LandingSelection {
-    buttons: Grid<1, 1, Button<Selection>>,
+    buttons: Grid<1, 2, Button<Selection>>,
 }
 
 pub enum Landing {
@@ -23,24 +23,22 @@ pub enum LandingCommand {
     Exit,
 }
 
-impl Landing {
-    pub fn new() -> Self {
-        Landing::Selection(LandingSelection {
-            buttons: Grid {
-                rect: Rect::new(400.0, 300.0, 150.0, 60.0),
-                components: [[Button {
-                    rect: Rect::new(400.0, 300.0, 150.0, 60.0),
-                    label: "Hello".to_string(),
-                    command: Selection::LoadBF,
-                }]],
-            },
-        })
-    }
-}
-
 #[async_trait]
 impl Ui for Landing {
     type Command = LandingCommand;
+    type Builder = ();
+
+    fn new(rect: Rect, _: ()) -> Self {
+        Landing::Selection(LandingSelection {
+            buttons: Grid::new(
+                rect,
+                [
+                    [("Hello".to_string(), Selection::LoadBF)],
+                    [("World".to_string(), Selection::LoadBF)],
+                ],
+            ),
+        })
+    }
     async fn draw(&self) {
         match &self {
             Landing::Selection(s) => s.buttons.draw().await,
