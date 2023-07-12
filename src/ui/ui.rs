@@ -63,7 +63,7 @@ pub struct Button<T: Clone> {
 }
 
 #[async_trait]
-impl<T: std::marker::Sync + std::clone::Clone> Ui for Button<T> {
+impl<T: Sync + Clone> Ui for Button<T> {
     type Command = T;
 
     async fn draw(&self) {
@@ -79,5 +79,27 @@ impl<T: std::marker::Sync + std::clone::Clone> Ui for Button<T> {
 
     fn get_command(&self, _: Input) -> T {
         self.command.clone()
+    }
+}
+
+pub struct Grid<const N: usize, const M: usize, C: Ui> {
+    pub rect: Rect,
+    pub components: [[C; N]; M],
+}
+
+#[async_trait]
+impl<const N: usize, const M: usize, C: Ui + Sync + Send> Ui for Grid<N, M, C> {
+    type Command = <C>::Command;
+
+    async fn draw(&self) {
+        for i in 0..N {
+            for j in 0..M {
+                self.components[i][j].draw().await;
+            }
+        }
+    }
+
+    fn get_command(&self, input: Input) -> <C>::Command {
+        self.components[0][0].get_command(input).clone()
     }
 }
