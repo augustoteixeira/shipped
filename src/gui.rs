@@ -20,13 +20,13 @@ fn window_conf() -> Conf {
 async fn main() {
     let landing = Landing::new(Rect::new(500.0, 336.0, 500.0, 336.0), ());
     loop {
-        clear_background(RED);
+        clear_background(BLACK);
 
         landing.draw().await;
 
         if let Some(input) = get_input() {
             match landing.get_command(input) {
-                LandingCommand::Exit => {
+                Some(LandingCommand::Exit) => {
                     break;
                 }
                 _ => {}

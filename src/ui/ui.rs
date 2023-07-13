@@ -58,7 +58,7 @@ pub trait Ui {
 
     fn new(rect: Rect, builder: Self::Builder) -> Self;
     async fn draw(&self);
-    fn get_command(&self, input: Input) -> Self::Command;
+    fn get_command(&self, input: Input) -> Option<Self::Command>;
 }
 
 #[derive(Debug)]
@@ -86,14 +86,25 @@ impl<T: Sync + Clone + core::fmt::Debug> Ui for Button<T> {
             self.rect.y,
             self.rect.w,
             self.rect.h,
-            2.0,
-            GREEN,
+            4.0,
+            DARKGREEN,
         );
-        draw_text(self.label.as_str(), self.rect.x, self.rect.y, 20.0, BLACK);
+        let TextDimensions {
+            width: t_w,
+            height: t_h,
+            ..
+        } = measure_text(self.label.as_str(), None, 40, 1.0);
+        draw_text(
+            self.label.as_str(),
+            self.rect.x + self.rect.w / 2.0 - t_w / 2.0,
+            self.rect.y + self.rect.h / 2.0 + t_h / 2.0,
+            40.0,
+            DARKGREEN,
+        );
     }
 
-    fn get_command(&self, _: Input) -> T {
-        self.command.clone()
+    fn get_command(&self, _: Input) -> Option<T> {
+        Some(self.command.clone())
     }
 }
 
@@ -117,18 +128,6 @@ impl<
         let y = rect.y;
         let x_delta = rect.w / (N as f32);
         let y_delta = rect.h / (M as f32);
-        // let mut components: [[C; N]; M] =
-        //     unsafe { MaybeUninit::uninit().assume_init() };
-        // for (i, column) in &mut components[..].into_iter().enumerate() {
-        //     for (j, element) in &mut column[..].into_iter().enumerate() {
-        //         std::ptr::write(
-        //             element,
-        //             C::new(Rect::new(x, y, x_delta, y_delta), builder[i][j]),
-        //         );
-        //         x += x_delta;
-        //     }
-        //     y += y_delta;
-        // }
         let x_pos: [[f32; N]; M] =
             [init_array(|i| x + (i as f32) * x_delta); M];
         let y_pos: [[f32; N]; M] =
@@ -153,30 +152,7 @@ impl<
             .unwrap();
         Grid::<N, M, C> {
             rect: rect.clone(),
-            components, // : builder
-                        // .into_iter()
-                        // .map(|row| {
-                        //     row.into_iter()
-                        //         .map(|c| {
-                        //             let c = C::new(
-                        //                 Rect::new(
-                        //                     x + (i as f32) * x_delta,
-                        //                     y,
-                        //                     x_delta,
-                        //                     y_delta,
-                        //                 ),
-                        //                 builder[i][j].clone(),
-                        //             );
-                        //             i += 1;
-                        //             c
-                        //         })
-                        //         .collect::<Vec<C>>()
-                        //         .try_into()
-                        //         .unwrap()
-                        // })
-                        // .collect::<Vec<[C; N]>>()
-                        // .try_into()
-                        // .unwrap(),
+            components,
         }
     }
     async fn draw(&self) {
@@ -187,7 +163,30 @@ impl<
         }
     }
 
-    fn get_command(&self, input: Input) -> <C>::Command {
-        self.components[0][0].get_command(input).clone()
+    fn get_command(&self, input: Input) -> Option<<C>::Command> {
+        if let Input::Click(MouseButton::Left, (x, y)) = input {
+            for i in 0..N {
+                for j in 0..M {
+                    let r = self.rect.clone();
+                    let y_delta = r.h / (M as f32);
+                    let x_delta = r.w / (N as f32);
+                    if in_rectangle(
+                        x,
+                        y,
+                        &Rect::new(
+                            r.x,
+                            r.y + (j as f32) * y_delta,
+                            x_delta,
+                            y_delta,
+                        ),
+                    ) {
+                        return self.components[j][i]
+                            .get_command(input)
+                            .clone();
+                    }
+                }
+            }
+        }
+        None
     }
 }

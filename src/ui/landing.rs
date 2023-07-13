@@ -1,16 +1,19 @@
 use async_trait::async_trait;
+use macroquad::prelude::*;
 
 use super::ui::{Button, Grid, Input, Rect, Ui};
 
 #[derive(Clone, Debug)]
 enum Selection {
     LoadBF,
-    _CreateBF,
-    _UploadCode,
+    CreateBF,
+    UploadCode,
+    Credits,
+    Quit,
 }
 
 pub struct LandingSelection {
-    buttons: Grid<1, 2, Button<Selection>>,
+    buttons: Grid<1, 5, Button<Selection>>,
 }
 
 pub enum Landing {
@@ -19,7 +22,6 @@ pub enum Landing {
 
 #[derive(Clone)]
 pub enum LandingCommand {
-    Nothing,
     Exit,
 }
 
@@ -33,8 +35,11 @@ impl Ui for Landing {
             buttons: Grid::new(
                 rect,
                 [
-                    [("Hello".to_string(), Selection::LoadBF)],
-                    [("World".to_string(), Selection::LoadBF)],
+                    [("Load Battlefield".to_string(), Selection::LoadBF)],
+                    [("Create Battlefield".to_string(), Selection::CreateBF)],
+                    [("Upload Code".to_string(), Selection::UploadCode)],
+                    [("Credits".to_string(), Selection::Credits)],
+                    [("Quit".to_string(), Selection::Quit)],
                 ],
             ),
         })
@@ -44,11 +49,19 @@ impl Ui for Landing {
             Landing::Selection(s) => s.buttons.draw().await,
         }
     }
-    fn get_command(&self, input: Input) -> LandingCommand {
+    fn get_command(&self, input: Input) -> Option<LandingCommand> {
         match &self {
-            Landing::Selection(s) => match input {
-                _ => LandingCommand::Exit,
-            },
+            Landing::Selection(s) => {
+                if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) =
+                    input
+                {
+                    return Some(LandingCommand::Exit);
+                }
+                match s.buttons.get_command(input) {
+                    Some(Selection::Quit) => Some(LandingCommand::Exit),
+                    _ => None,
+                }
+            }
         }
     }
 }
