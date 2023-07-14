@@ -21,6 +21,8 @@ pub struct NewBF {
     tileset: Texture2D,
 }
 
+const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.5);
+
 #[async_trait]
 impl Ui for NewBF {
     type Command = ();
@@ -52,15 +54,29 @@ impl Ui for NewBF {
         }
     }
     async fn draw(&self) {
-        draw_floor(800.0, 30.0, &self.tileset, &self.floor).await;
+        let x_disp = 800.0;
+        let y_disp = 30.0;
+        draw_floor(x_disp, y_disp, &self.tileset, &self.floor).await;
         draw_text("bla", 200.0, 200.0, 40.0, DARKGREEN);
-        draw_rectangle(
-            800.0,
-            30.0,
-            16.0 * 60.0,
-            16.0 * 30.0,
-            Color::new(0.0, 0.0, 0.0, 0.5),
-        );
+        draw_rectangle(x_disp, y_disp, 16.0 * 60.0, 16.0 * 30.0, SMOKE);
+        for i in 0..=WIDTH {
+            draw_line(
+                x_disp + (i as f32) * 16.0,
+                y_disp,
+                x_disp + (i as f32) * 16.0,
+                y_disp + (60.0 * 16.0),
+                1.0,
+                SMOKE,
+            );
+            draw_line(
+                x_disp,
+                y_disp + (i as f32) * 16.0,
+                x_disp + (60.0 * 16.0),
+                y_disp + (i as f32) * 16.0,
+                1.0,
+                SMOKE,
+            );
+        }
     }
     fn process_input(&mut self, input: Input) -> Option<()> {
         if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) = input {
