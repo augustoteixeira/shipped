@@ -29,6 +29,17 @@ pub fn within_rectangle(x: f32, y: f32, rect: &Rect) -> Option<(f32, f32)> {
     }
 }
 
+pub fn trim_margins(rect: Rect, t: f32, b: f32, l: f32, r: f32) -> Rect {
+    assert!(t >= 0.0 && b >= 0.0 && l >= 0.0 && r >= 0.0);
+    assert!(t + b <= 1.0 && l + r <= 1.0);
+    Rect::new(
+        rect.x + l * rect.w,
+        rect.y + t * rect.h,
+        rect.w * (1.0 - l - r),
+        rect.h * (1.0 - t - b),
+    )
+}
+
 pub enum Input {
     Key(KeyCode),
     Click(MouseButton, (f32, f32)),
@@ -58,7 +69,7 @@ pub trait Ui {
 
     fn new(rect: Rect, builder: Self::Builder) -> Self;
     async fn draw(&self);
-    fn get_command(&self, input: Input) -> Option<Self::Command>;
+    fn process_input(&mut self, input: Input) -> Option<Self::Command>;
 }
 
 #[derive(Debug)]
@@ -103,7 +114,7 @@ impl<T: Sync + Clone + core::fmt::Debug> Ui for Button<T> {
         );
     }
 
-    fn get_command(&self, _: Input) -> Option<T> {
+    fn process_input(&mut self, _: Input) -> Option<T> {
         Some(self.command.clone())
     }
 }
@@ -163,7 +174,7 @@ impl<
         }
     }
 
-    fn get_command(&self, input: Input) -> Option<<C>::Command> {
+    fn process_input(&mut self, input: Input) -> Option<<C>::Command> {
         if let Input::Click(MouseButton::Left, (x, y)) = input {
             for i in 0..N {
                 for j in 0..M {
@@ -181,7 +192,7 @@ impl<
                         ),
                     ) {
                         return self.components[j][i]
-                            .get_command(input)
+                            .process_input(input)
                             .clone();
                     }
                 }

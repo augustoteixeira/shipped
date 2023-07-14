@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use macroquad::prelude::*;
 
-use super::ui::{Button, Grid, Input, Rect, Ui};
+use super::ui::{trim_margins, Button, Grid, Input, Rect, Ui};
 
 #[derive(Clone, Debug)]
 enum Selection {
@@ -16,14 +16,32 @@ pub struct LandingSelection {
     buttons: Grid<1, 5, Button<Selection>>,
 }
 
-pub enum Landing {
+pub enum LandingState {
     Selection(LandingSelection),
     Credits(Credits),
+}
+
+pub struct Landing {
+    rect: Rect,
+    state: LandingState,
 }
 
 #[derive(Clone)]
 pub enum LandingCommand {
     Exit,
+}
+
+fn button_grid(rect: Rect) -> Grid<1, 5, Button<Selection>> {
+    Grid::new(
+        rect,
+        [
+            [("Load Battlefield".to_string(), Selection::LoadBF)],
+            [("Create Battlefield".to_string(), Selection::CreateBF)],
+            [("Upload Code".to_string(), Selection::UploadCode)],
+            [("Credits".to_string(), Selection::Credits)],
+            [("Quit".to_string(), Selection::Quit)],
+        ],
+    )
 }
 
 #[async_trait]
@@ -32,47 +50,61 @@ impl Ui for Landing {
     type Builder = ();
 
     fn new(rect: Rect, _: ()) -> Self {
-        Landing::Selection(LandingSelection {
-            buttons: Grid::new(
-                rect,
-                [
-                    [("Load Battlefield".to_string(), Selection::LoadBF)],
-                    [("Create Battlefield".to_string(), Selection::CreateBF)],
-                    [("Upload Code".to_string(), Selection::UploadCode)],
-                    [("Credits".to_string(), Selection::Credits)],
-                    [("Quit".to_string(), Selection::Quit)],
-                ],
-            ),
-        })
-    }
-    async fn draw(&self) {
-        match &self {
-            Landing::Selection(s) => s.buttons.draw().await,
-            Landing::Credits(c) => c.draw().await,
+        Landing {
+            rect: rect.clone(),
+            state: LandingState::Selection(LandingSelection {
+                buttons: button_grid(trim_margins(rect, 0.3, 0.3, 0.3, 0.3)),
+            }),
         }
     }
-    fn get_command(&self, input: Input) -> Option<LandingCommand> {
-        match &self {
-            Landing::Selection(s) => {
+    async fn draw(&self) {
+        match &self.state {
+            LandingState::Selection(s) => s.buttons.draw().await,
+            LandingState::Credits(c) => c.draw().await,
+        }
+    }
+    fn process_input(&mut self, input: Input) -> Option<LandingCommand> {
+        match &mut self.state {
+            LandingState::Selection(s) => {
                 if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) =
                     input
                 {
                     return Some(LandingCommand::Exit);
                 }
-                match s.buttons.get_command(input) {
+                match s.buttons.process_input(input) {
                     Some(Selection::Quit) => Some(LandingCommand::Exit),
+                    Some(Selection::Credits) => {
+                        self.state = LandingState::Credits(Credits::new(
+                            self.rect.clone(),
+                            "Hi there!".to_string(),
+                        ));
+                        None
+                    }
                     _ => None,
                 }
             }
-            Landing::Credits(s) => {
-                self = &Self::new(Rect::new(0.0, 0.0, 1000.0, 1000.0), ());
+            LandingState::Credits(c) => {
+                match c.process_input(input) {
+                    Some(()) => {
+                        self.state = LandingState::Selection(LandingSelection {
+                            buttons: button_grid(trim_margins(
+                                self.rect.clone(),
+                                0.3,
+                                0.3,
+                                0.3,
+                                0.3,
+                            )),
+                        })
+                    }
+                    _ => {}
+                }
                 None
             }
         }
     }
 }
 
-struct Credits {
+pub struct Credits {
     text: String,
 }
 
@@ -87,7 +119,7 @@ impl Ui for Credits {
     async fn draw(&self) {
         draw_text(self.text.as_str(), 200.0, 200.0, 40.0, DARKGREEN);
     }
-    fn get_command(&self, input: Input) -> Option<()> {
+    fn process_input(&mut self, input: Input) -> Option<()> {
         Some(())
     }
 }
