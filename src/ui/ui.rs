@@ -72,6 +72,41 @@ pub trait Ui {
     fn process_input(&mut self, input: Input) -> Option<Self::Command>;
 }
 
+pub struct Text {
+    rect: Rect,
+    contents: String,
+}
+
+#[async_trait]
+impl Ui for Text {
+    type Command = ();
+    type Builder = String;
+
+    fn new(rect: Rect, builder: String) -> Self {
+        Text {
+            rect,
+            contents: builder,
+        }
+    }
+    async fn draw(&self) {
+        let TextDimensions {
+            width: t_w,
+            height: t_h,
+            ..
+        } = measure_text(self.contents.as_str(), None, 40, 1.0);
+        draw_text(
+            self.contents.as_str(),
+            self.rect.x + self.rect.w / 2.0 - t_w / 2.0,
+            self.rect.y + self.rect.h / 2.0 + t_h / 2.0,
+            40.0,
+            DARKGREEN,
+        );
+    }
+    fn process_input(&mut self, _: Input) -> Option<()> {
+        None
+    }
+}
+
 #[derive(Debug)]
 pub struct Button<T: Clone + core::fmt::Debug> {
     rect: Rect,

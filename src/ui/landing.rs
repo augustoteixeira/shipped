@@ -1,12 +1,13 @@
 use async_trait::async_trait;
 use macroquad::prelude::*;
 
+use super::new_bf::NewBF;
 use super::ui::{trim_margins, Button, Grid, Input, Rect, Ui};
 
 #[derive(Clone, Debug)]
 enum Selection {
     LoadBF,
-    CreateBF,
+    NewBF,
     UploadCode,
     Credits,
     Quit,
@@ -18,6 +19,7 @@ pub struct LandingSelection {
 
 pub enum LandingState {
     Selection(LandingSelection),
+    NewBF(NewBF),
     Credits(Credits),
 }
 
@@ -33,10 +35,10 @@ pub enum LandingCommand {
 
 fn button_grid(rect: Rect) -> Grid<1, 5, Button<Selection>> {
     Grid::new(
-        rect,
+        trim_margins(rect, 0.3, 0.3, 0.3, 0.3),
         [
             [("Load Battlefield".to_string(), Selection::LoadBF)],
-            [("Create Battlefield".to_string(), Selection::CreateBF)],
+            [("Create Battlefield".to_string(), Selection::NewBF)],
             [("Upload Code".to_string(), Selection::UploadCode)],
             [("Credits".to_string(), Selection::Credits)],
             [("Quit".to_string(), Selection::Quit)],
@@ -52,15 +54,17 @@ impl Ui for Landing {
     fn new(rect: Rect, _: ()) -> Self {
         Landing {
             rect: rect.clone(),
-            state: LandingState::Selection(LandingSelection {
-                buttons: button_grid(trim_margins(rect, 0.3, 0.3, 0.3, 0.3)),
-            }),
+            state: LandingState::NewBF(NewBF::new(rect.clone(), ())),
+            // LandingState::Selection(LandingSelection {
+            //     buttons: button_grid(rect),
+            // }),
         }
     }
     async fn draw(&self) {
         match &self.state {
             LandingState::Selection(s) => s.buttons.draw().await,
             LandingState::Credits(c) => c.draw().await,
+            LandingState::NewBF(n) => n.draw().await,
         }
     }
     fn process_input(&mut self, input: Input) -> Option<LandingCommand> {
@@ -80,6 +84,13 @@ impl Ui for Landing {
                         ));
                         None
                     }
+                    Some(Selection::NewBF) => {
+                        self.state = LandingState::NewBF(NewBF::new(
+                            self.rect.clone(),
+                            (),
+                        ));
+                        None
+                    }
                     _ => None,
                 }
             }
@@ -87,13 +98,18 @@ impl Ui for Landing {
                 match c.process_input(input) {
                     Some(()) => {
                         self.state = LandingState::Selection(LandingSelection {
-                            buttons: button_grid(trim_margins(
-                                self.rect.clone(),
-                                0.3,
-                                0.3,
-                                0.3,
-                                0.3,
-                            )),
+                            buttons: button_grid(self.rect.clone()),
+                        })
+                    }
+                    _ => {}
+                }
+                None
+            }
+            LandingState::NewBF(n) => {
+                match n.process_input(input) {
+                    Some(()) => {
+                        self.state = LandingState::Selection(LandingSelection {
+                            buttons: button_grid(self.rect.clone()),
                         })
                     }
                     _ => {}

@@ -17,6 +17,7 @@ rand = "0.8.5"
 rand_chacha = "0.3.1"
 line_drawing = "1.0.0"
 init_array = "0.3.0"
+futures = "0.3"
 
 [[bin]]
 name = "main"
