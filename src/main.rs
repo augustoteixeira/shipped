@@ -5,6 +5,7 @@ use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
 pub mod state;
+pub mod ui;
 
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{

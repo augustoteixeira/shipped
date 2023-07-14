@@ -119,7 +119,7 @@ impl Ui for Credits {
     async fn draw(&self) {
         draw_text(self.text.as_str(), 200.0, 200.0, 40.0, DARKGREEN);
     }
-    fn process_input(&mut self, input: Input) -> Option<()> {
+    fn process_input(&mut self, _: Input) -> Option<()> {
         Some(())
     }
 }
