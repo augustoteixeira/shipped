@@ -18,6 +18,7 @@ pub struct LandingSelection {
 
 pub enum Landing {
     Selection(LandingSelection),
+    Credits(Credits),
 }
 
 #[derive(Clone)]
@@ -47,6 +48,7 @@ impl Ui for Landing {
     async fn draw(&self) {
         match &self {
             Landing::Selection(s) => s.buttons.draw().await,
+            Landing::Credits(c) => c.draw().await,
         }
     }
     fn get_command(&self, input: Input) -> Option<LandingCommand> {
@@ -62,6 +64,30 @@ impl Ui for Landing {
                     _ => None,
                 }
             }
+            Landing::Credits(s) => {
+                self = &Self::new(Rect::new(0.0, 0.0, 1000.0, 1000.0), ());
+                None
+            }
         }
+    }
+}
+
+struct Credits {
+    text: String,
+}
+
+#[async_trait]
+impl Ui for Credits {
+    type Command = ();
+    type Builder = String;
+
+    fn new(_: Rect, string: String) -> Self {
+        Credits { text: string }
+    }
+    async fn draw(&self) {
+        draw_text(self.text.as_str(), 200.0, 200.0, 40.0, DARKGREEN);
+    }
+    fn get_command(&self, input: Input) -> Option<()> {
+        Some(())
     }
 }
