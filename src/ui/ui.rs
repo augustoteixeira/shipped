@@ -40,6 +40,33 @@ pub fn trim_margins(rect: Rect, t: f32, b: f32, l: f32, r: f32) -> Rect {
     )
 }
 
+pub fn split(rect: &Rect, x_tics: Vec<f32>, y_tics: Vec<f32>) -> Vec<Rect> {
+    let mut result: Vec<Rect> = vec![];
+    for y in y_tics.windows(2) {
+        for x in x_tics.windows(2) {
+            result.push(Rect::new(
+                rect.x + rect.w * x[0],
+                rect.y + rect.h * y[0],
+                rect.x + rect.w * (x[1] - x[0]),
+                rect.y + rect.h * (y[1] - y[0]),
+            ));
+        }
+    }
+    result
+}
+
+pub async fn draw_centered_text(rect: &Rect, text: &str) {
+    let center = get_text_center(&text, None, 40, 1.0, 0.0);
+    draw_text(
+        &text,
+        rect.x + rect.w / 2.0 - center.x,
+        rect.y + rect.h / 2.0 - center.y,
+        40.0,
+        DARKGREEN,
+    );
+}
+
+#[derive(Debug, Clone)]
 pub enum Input {
     Key(KeyCode),
     Click(MouseButton, (f32, f32)),
@@ -149,8 +176,53 @@ impl<T: Sync + Clone + core::fmt::Debug> Ui for Button<T> {
         );
     }
 
-    fn process_input(&mut self, _: Input) -> Option<T> {
-        Some(self.command.clone())
+    fn process_input(&mut self, input: Input) -> Option<T> {
+        if let Input::Click(MouseButton::Left, (x, y)) = input {
+            if in_rectangle(x, y, &self.rect) {
+                return Some(self.command.clone());
+            }
+        }
+        None
+    }
+}
+
+#[derive(Debug)]
+pub struct ButtonPanel<T: Clone + core::fmt::Debug> {
+    buttons: Vec<Button<T>>,
+}
+
+#[async_trait]
+impl<T: Sync + Clone + core::fmt::Debug + Send> Ui for ButtonPanel<T> {
+    type Command = T;
+    type Builder = Vec<(Rect, String, T)>;
+
+    fn new(_: Rect, builder: Vec<(Rect, String, T)>) -> Self {
+        ButtonPanel {
+            buttons: builder
+                .into_iter()
+                .map(|(rect, s, t)| Button {
+                    rect,
+                    label: s,
+                    command: t,
+                })
+                .collect(),
+        }
+    }
+    async fn draw(&self) {
+        for b in &self.buttons {
+            b.draw().await;
+        }
+    }
+
+    fn process_input(&mut self, input: Input) -> Option<T> {
+        if let Input::Click(MouseButton::Left, (x, y)) = input {
+            for b in &self.buttons {
+                if in_rectangle(x, y, &b.rect) {
+                    return Some(b.command.clone());
+                }
+            }
+        }
+        None
     }
 }
 
@@ -236,3 +308,8 @@ impl<
         None
     }
 }
+
+// pub struct ButtonVec {
+//     pub rect: Rect,
+//     pub components: [[C; N]; M],
+// }
