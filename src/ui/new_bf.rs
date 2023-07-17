@@ -6,24 +6,51 @@ use futures::executor::block_on;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
+use std::borrow::BorrowMut;
 use std::iter::zip;
 
 use super::canvas::draw_floor;
-use super::ui::{draw_centered_text, split, ButtonPanel, Input, Rect, Ui};
+use super::ui::{
+    draw_centered_text, split, trim_margins, ButtonPanel, Input, Rect, Ui,
+};
 use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::materials::Materials;
 use crate::state::state::Tile;
 
 #[derive(Clone, Debug)]
+pub enum MatName {
+    Carbon,
+    Silicon,
+    Plutonium,
+    Copper,
+}
+
+#[derive(Clone, Debug)]
+pub enum Brush {
+    Carbon,
+    Silicon,
+    Plutonium,
+    Copper,
+    Bot(usize),
+}
+
+#[derive(Clone, Debug)]
+pub enum Sign {
+    Plus,
+    Minus,
+}
+
+#[derive(Clone, Debug)]
 pub enum Command {
-    CarbonPlus,
-    CarbonMinus,
+    MatPM(MatName, Sign),
+    MatBrush(MatName),
 }
 
 #[derive(Debug)]
 pub struct NewBF {
     rect: Rect,
     materials: Materials,
+    brush: Brush,
     tiles: Vec<Tile>,
     floor: [usize; WIDTH * HEIGHT],
     tileset: Texture2D,
@@ -33,32 +60,49 @@ pub struct NewBF {
 const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.5);
 
 pub fn bf_panel(rect: &Rect) -> ButtonPanel<Command> {
-    let rects: Vec<Rect> = split(
+    // Material +- buttons
+    let mut rects: Vec<Rect> = split(
         &rect,
-        (0..5).map(|p| (p as f32) * 0.1075).collect(),
-        vec![0.1, 0.2],
+        (0..9).map(|p| (p as f32) * 0.05).collect(),
+        vec![0.1, 0.175],
     );
-    let labels: Vec<String> = vec![
-        "A".to_string(),
-        "B".to_string(),
-        "C".to_string(),
-        "D".to_string(),
+    let mut labels: Vec<String> = vec![
+        "^".to_string(),
+        "v".to_string(),
+        "^".to_string(),
+        "v".to_string(),
+        "^".to_string(),
+        "v".to_string(),
+        "^".to_string(),
+        "v".to_string(),
     ];
-    let commands = vec![
-        Command::CarbonPlus,
-        Command::CarbonPlus,
-        Command::CarbonPlus,
-        Command::CarbonPlus,
+    let mut commands = vec![
+        Command::MatPM(MatName::Carbon, Sign::Plus),
+        Command::MatPM(MatName::Carbon, Sign::Minus),
+        Command::MatPM(MatName::Silicon, Sign::Plus),
+        Command::MatPM(MatName::Silicon, Sign::Minus),
+        Command::MatPM(MatName::Plutonium, Sign::Plus),
+        Command::MatPM(MatName::Plutonium, Sign::Minus),
+        Command::MatPM(MatName::Copper, Sign::Plus),
+        Command::MatPM(MatName::Copper, Sign::Minus),
     ];
+    // Material brush buttons
+    rects.append(&mut split(
+        &rect,
+        (0..5).map(|p| (p as f32) * 0.1).collect(),
+        vec![0.175, 0.25],
+    ));
+    labels.append(&mut vec!["Use".to_string(); 4]);
+    commands.append(&mut vec![
+        Command::MatBrush(MatName::Carbon),
+        Command::MatBrush(MatName::Silicon),
+        Command::MatBrush(MatName::Plutonium),
+        Command::MatBrush(MatName::Copper),
+    ]);
     let builder = zip(zip(rects, labels), commands)
         .into_iter()
-        .map(|((r, l), c)| (r, l, c))
+        .map(|((r, l), c)| (trim_margins(r, 0.1, 0.1, 0.1, 0.1), l, c))
         .collect();
-    //     vec![(
-    //     Rect::new(0.0, 0.0, 50.0, 50.0),
-    //     "Hi".to_string(),
-    //     Command::CarbonPlus,
-    // )];
     let buttons = ButtonPanel::<Command>::new(
         Rect::new(0.0, 0.0, 1000.0, 1000.0),
         builder,
@@ -88,6 +132,7 @@ impl Ui for NewBF {
                 plutonium: 0,
                 copper: 0,
             },
+            brush: Brush::Carbon,
             tiles: (0..(WIDTH * HEIGHT))
                 .map(|_| Tile {
                     entity_id: None,
@@ -111,7 +156,7 @@ impl Ui for NewBF {
         draw_floor(x_disp, y_disp, &self.tileset, &self.floor).await;
         let mat_rect = split(
             &self.rect,
-            (0..5).map(|p| (p as f32) * 0.1075).collect(),
+            (0..5).map(|p| (p as f32) * 0.1).collect(),
             vec![0.0, 0.05, 0.1],
         );
         draw_centered_text(&mat_rect[0], "Carbon").await;
@@ -138,6 +183,16 @@ impl Ui for NewBF {
             format!("{:05}", self.materials.copper,).as_str(),
         )
         .await;
+        let sel = self.buttons.buttons[match self.brush {
+            Brush::Carbon => 8,
+            Brush::Silicon => 9,
+            Brush::Plutonium => 10,
+            Brush::Copper => 11,
+            _ => 11,
+        }]
+        .rect
+        .clone();
+        draw_rectangle_lines(sel.x, sel.y, sel.w, sel.h, 6.0, RED);
         draw_rectangle(x_disp, y_disp, 16.0 * 60.0, 16.0 * 30.0, SMOKE);
         for i in 0..=WIDTH {
             draw_line(
@@ -159,7 +214,55 @@ impl Ui for NewBF {
         }
     }
     fn process_input(&mut self, input: Input) -> Option<()> {
-        self.buttons.process_input(input.clone());
+        match self.buttons.process_input(input.clone()) {
+            None => {}
+            Some(Command::MatPM(mat_name, sign)) => match mat_name {
+                MatName::Carbon => match sign {
+                    Sign::Plus => {
+                        self.materials.carbon += 1;
+                    }
+                    Sign::Minus => {
+                        self.materials.carbon =
+                            self.materials.carbon.saturating_sub(1);
+                    }
+                },
+                MatName::Silicon => match sign {
+                    Sign::Plus => {
+                        self.materials.silicon += 1;
+                    }
+                    Sign::Minus => {
+                        self.materials.silicon =
+                            self.materials.silicon.saturating_sub(1);
+                    }
+                },
+                MatName::Plutonium => match sign {
+                    Sign::Plus => {
+                        self.materials.plutonium += 1;
+                    }
+                    Sign::Minus => {
+                        self.materials.plutonium =
+                            self.materials.plutonium.saturating_sub(1);
+                    }
+                },
+                MatName::Copper => match sign {
+                    Sign::Plus => {
+                        self.materials.copper += 1;
+                    }
+                    Sign::Minus => {
+                        self.materials.copper =
+                            self.materials.copper.saturating_sub(1);
+                    }
+                },
+            },
+            Some(Command::MatBrush(mat)) => {
+                self.brush = match mat {
+                    MatName::Carbon => Brush::Carbon,
+                    MatName::Silicon => Brush::Silicon,
+                    MatName::Plutonium => Brush::Plutonium,
+                    MatName::Copper => Brush::Copper,
+                }
+            }
+        };
         if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) = input {
             Some(())
         } else {

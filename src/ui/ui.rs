@@ -136,7 +136,7 @@ impl Ui for Text {
 
 #[derive(Debug)]
 pub struct Button<T: Clone + core::fmt::Debug> {
-    rect: Rect,
+    pub rect: Rect,
     label: String,
     command: T,
 }
@@ -188,7 +188,7 @@ impl<T: Sync + Clone + core::fmt::Debug> Ui for Button<T> {
 
 #[derive(Debug)]
 pub struct ButtonPanel<T: Clone + core::fmt::Debug> {
-    buttons: Vec<Button<T>>,
+    pub buttons: Vec<Button<T>>,
 }
 
 #[async_trait]
