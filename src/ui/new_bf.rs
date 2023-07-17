@@ -41,15 +41,24 @@ pub enum Sign {
 }
 
 #[derive(Clone, Debug)]
+pub enum TknButton {
+    Tokens,
+    MinTkns,
+}
+
+#[derive(Clone, Debug)]
 pub enum Command {
     MatPM(MatName, Sign),
     MatBrush(MatName),
+    Token(TknButton, Sign),
 }
 
 #[derive(Debug)]
 pub struct NewBF {
     rect: Rect,
     materials: Materials,
+    tokens: usize,
+    min_tokens: usize,
     brush: Brush,
     tiles: Vec<Tile>,
     floor: [usize; WIDTH * HEIGHT],
@@ -99,6 +108,24 @@ pub fn bf_panel(rect: &Rect) -> ButtonPanel<Command> {
         Command::MatBrush(MatName::Plutonium),
         Command::MatBrush(MatName::Copper),
     ]);
+    rects.append(&mut split(
+        &rect,
+        (2..7).map(|p| (p as f32) * 0.05).collect(),
+        vec![0.375, 0.45],
+    ));
+    labels.append(&mut vec![
+        "^".to_string(),
+        "v".to_string(),
+        "^".to_string(),
+        "v".to_string(),
+    ]);
+    commands.append(&mut vec![
+        Command::Token(TknButton::Tokens, Sign::Plus),
+        Command::Token(TknButton::Tokens, Sign::Minus),
+        Command::Token(TknButton::MinTkns, Sign::Plus),
+        Command::Token(TknButton::MinTkns, Sign::Minus),
+    ]);
+
     let builder = zip(zip(rects, labels), commands)
         .into_iter()
         .map(|((r, l), c)| (trim_margins(r, 0.1, 0.1, 0.1, 0.1), l, c))
@@ -132,6 +159,8 @@ impl Ui for NewBF {
                 plutonium: 0,
                 copper: 0,
             },
+            tokens: 0,
+            min_tokens: 0,
             brush: Brush::Carbon,
             tiles: (0..(WIDTH * HEIGHT))
                 .map(|_| Tile {
@@ -181,6 +210,23 @@ impl Ui for NewBF {
         draw_centered_text(
             &mat_rect[7],
             format!("{:05}", self.materials.copper,).as_str(),
+        )
+        .await;
+        let tk_rect = split(
+            &self.rect,
+            (1..4).map(|p| (p as f32) * 0.1).collect(),
+            vec![0.275, 0.325, 0.375],
+        );
+        draw_centered_text(&tk_rect[0], "Tokens").await;
+        draw_centered_text(&tk_rect[1], "Min Tkns").await;
+        draw_centered_text(
+            &tk_rect[2],
+            format!("{:05}", self.tokens,).as_str(),
+        )
+        .await;
+        draw_centered_text(
+            &tk_rect[3],
+            format!("{:05}", self.min_tokens,).as_str(),
         )
         .await;
         let sel = self.buttons.buttons[match self.brush {
@@ -262,6 +308,24 @@ impl Ui for NewBF {
                     MatName::Copper => Brush::Copper,
                 }
             }
+            Some(Command::Token(tk_button, sign)) => match tk_button {
+                TknButton::Tokens => match sign {
+                    Sign::Plus => {
+                        self.tokens += 1;
+                    }
+                    Sign::Minus => {
+                        self.tokens = self.tokens.saturating_sub(1);
+                    }
+                },
+                TknButton::MinTkns => match sign {
+                    Sign::Plus => {
+                        self.min_tokens += 1;
+                    }
+                    Sign::Minus => {
+                        self.min_tokens = self.min_tokens.saturating_sub(1);
+                    }
+                },
+            },
         };
         if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) = input {
             Some(())
