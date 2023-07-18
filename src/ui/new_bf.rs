@@ -6,16 +6,19 @@ use futures::executor::block_on;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-use std::borrow::BorrowMut;
 use std::iter::zip;
 
-use super::canvas::draw_floor;
+use super::canvas::{draw_floor, draw_mat_map};
 use super::ui::{
     draw_centered_text, split, trim_margins, ButtonPanel, Input, Rect, Ui,
 };
 use crate::state::constants::{HEIGHT, WIDTH};
+use crate::state::geometry::{board_iterator, Pos};
 use crate::state::materials::Materials;
 use crate::state::state::Tile;
+
+const XDISPL: f32 = 800.0;
+const YDISPL: f32 = 30.0;
 
 #[derive(Clone, Debug)]
 pub enum MatName {
@@ -51,6 +54,7 @@ pub enum Command {
     MatPM(MatName, Sign),
     MatBrush(MatName),
     Token(TknButton, Sign),
+    MapLeftClk(Pos),
 }
 
 #[derive(Debug)]
@@ -66,7 +70,7 @@ pub struct NewBF {
     buttons: ButtonPanel<Command>,
 }
 
-const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.5);
+const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
 
 pub fn bf_panel(rect: &Rect) -> ButtonPanel<Command> {
     // Material +- buttons
@@ -125,16 +129,63 @@ pub fn bf_panel(rect: &Rect) -> ButtonPanel<Command> {
         Command::Token(TknButton::MinTkns, Sign::Plus),
         Command::Token(TknButton::MinTkns, Sign::Minus),
     ]);
-
-    let builder = zip(zip(rects, labels), commands)
-        .into_iter()
-        .map(|((r, l), c)| (trim_margins(r, 0.1, 0.1, 0.1, 0.1), l, c))
-        .collect();
+    // collect
+    let mut builder: Vec<(Rect, String, Command)> =
+        zip(zip(rects, labels), commands)
+            .into_iter()
+            .map(|((r, l), c)| (trim_margins(r, 0.1, 0.1, 0.1, 0.1), l, c))
+            .collect();
+    // bot panel
+    let bot_0_rect = split(
+        &rect,
+        (0..5).map(|p| (p as f32) * 0.1).collect(),
+        vec![0.575, 0.725],
+    )[0]
+    .clone();
+    builder.append(&mut build_bot_panel(&bot_0_rect, 0));
+    builder.append(
+        &mut board_iterator()
+            .into_iter()
+            .map(|pos| -> (Rect, String, Command) {
+                (
+                    Rect::new(
+                        XDISPL + 16.0 * (pos.x as f32),
+                        YDISPL + 16.0 * (pos.y as f32),
+                        16.0,
+                        16.0,
+                    ),
+                    "".to_string(),
+                    Command::MapLeftClk(pos),
+                )
+            })
+            .collect(),
+    );
     let buttons = ButtonPanel::<Command>::new(
         Rect::new(0.0, 0.0, 1000.0, 1000.0),
         builder,
     );
     return buttons;
+}
+
+fn build_bot_panel(rect: &Rect, _index: usize) -> Vec<(Rect, String, Command)> {
+    let rects: Vec<Rect> =
+        split(&rect, vec![0.0, 0.5, 1.0], vec![0.0, 0.5, 1.0]);
+    let labels: Vec<String> = vec![
+        "^".to_string(),
+        "v".to_string(),
+        "Edt".to_string(),
+        "Sel".to_string(),
+    ];
+    let commands = vec![
+        Command::MatPM(MatName::Silicon, Sign::Plus),
+        Command::MatPM(MatName::Silicon, Sign::Minus),
+        Command::MatPM(MatName::Plutonium, Sign::Plus),
+        Command::MatPM(MatName::Plutonium, Sign::Minus),
+    ];
+    zip(zip(rects, labels), commands)
+        .into_iter()
+        .map(|((r, l), c)| (trim_margins(r, 0.1, 0.1, 0.1, 0.1), l, c))
+        .collect()
 }
 
 #[async_trait]
@@ -178,11 +229,11 @@ impl Ui for NewBF {
             buttons,
         }
     }
+
     async fn draw(&self) {
-        let x_disp = 800.0;
-        let y_disp = 30.0;
         self.buttons.draw().await;
-        draw_floor(x_disp, y_disp, &self.tileset, &self.floor).await;
+        draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
+        draw_mat_map(&self.tiles, XDISPL, YDISPL, &self.tileset).await;
         let mat_rect = split(
             &self.rect,
             (0..5).map(|p| (p as f32) * 0.1).collect(),
@@ -239,26 +290,56 @@ impl Ui for NewBF {
         .rect
         .clone();
         draw_rectangle_lines(sel.x, sel.y, sel.w, sel.h, 6.0, RED);
-        draw_rectangle(x_disp, y_disp, 16.0 * 60.0, 16.0 * 30.0, SMOKE);
+        let bot_rect = split(
+            &self.rect,
+            (0..5).map(|p| (p as f32) * 0.1).collect(),
+            vec![0.475, 0.525, 0.575],
+        );
+        draw_centered_text(&bot_rect[0], "Bot 0").await;
+        draw_centered_text(&bot_rect[1], "Bot 1").await;
+        draw_centered_text(&bot_rect[2], "Bot 2").await;
+        draw_centered_text(&bot_rect[3], "Bot 3").await;
+        draw_centered_text(
+            &bot_rect[4],
+            format!("{:03}", self.materials.carbon).as_str(),
+        )
+        .await;
+        draw_centered_text(
+            &bot_rect[5],
+            format!("{:03}", self.materials.carbon).as_str(),
+        )
+        .await;
+        draw_centered_text(
+            &bot_rect[6],
+            format!("{:03}", self.materials.carbon).as_str(),
+        )
+        .await;
+        draw_centered_text(
+            &bot_rect[7],
+            format!("{:03}", self.materials.carbon).as_str(),
+        )
+        .await;
+        draw_rectangle(XDISPL, YDISPL, 16.0 * 60.0, 16.0 * 30.0, SMOKE);
         for i in 0..=WIDTH {
             draw_line(
-                x_disp + (i as f32) * 16.0,
-                y_disp,
-                x_disp + (i as f32) * 16.0,
-                y_disp + (60.0 * 16.0),
+                XDISPL + (i as f32) * 16.0,
+                YDISPL,
+                XDISPL + (i as f32) * 16.0,
+                YDISPL + (60.0 * 16.0),
                 1.0,
                 SMOKE,
             );
             draw_line(
-                x_disp,
-                y_disp + (i as f32) * 16.0,
-                x_disp + (60.0 * 16.0),
-                y_disp + (i as f32) * 16.0,
+                XDISPL,
+                YDISPL + (i as f32) * 16.0,
+                XDISPL + (60.0 * 16.0),
+                YDISPL + (i as f32) * 16.0,
                 1.0,
                 SMOKE,
             );
         }
     }
+
     fn process_input(&mut self, input: Input) -> Option<()> {
         match self.buttons.process_input(input.clone()) {
             None => {}
@@ -325,6 +406,26 @@ impl Ui for NewBF {
                         self.min_tokens = self.min_tokens.saturating_sub(1);
                     }
                 },
+            },
+            Some(Command::MapLeftClk(pos)) => match self.brush {
+                Brush::Carbon => {
+                    self.tiles[pos.to_index()].materials.carbon += 1;
+                    self.tiles[pos.invert().to_index()].materials.carbon += 1;
+                }
+                Brush::Silicon => {
+                    self.tiles[pos.to_index()].materials.silicon += 1;
+                    self.tiles[pos.invert().to_index()].materials.silicon += 1;
+                }
+                Brush::Plutonium => {
+                    self.tiles[pos.to_index()].materials.plutonium += 1;
+                    self.tiles[pos.invert().to_index()].materials.plutonium +=
+                        1;
+                }
+                Brush::Copper => {
+                    self.tiles[pos.to_index()].materials.copper += 1;
+                    self.tiles[pos.invert().to_index()].materials.copper += 1;
+                }
+                _ => {}
             },
         };
         if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) = input {

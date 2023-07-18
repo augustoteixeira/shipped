@@ -47,8 +47,8 @@ pub fn split(rect: &Rect, x_tics: Vec<f32>, y_tics: Vec<f32>) -> Vec<Rect> {
             result.push(Rect::new(
                 rect.x + rect.w * x[0],
                 rect.y + rect.h * y[0],
-                rect.x + rect.w * (x[1] - x[0]),
-                rect.y + rect.h * (y[1] - y[0]),
+                rect.w * (x[1] - x[0]),
+                rect.h * (y[1] - y[0]),
             ));
         }
     }

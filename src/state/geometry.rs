@@ -10,6 +10,40 @@ pub struct Pos {
     pub y: usize,
 }
 
+impl Pos {
+    pub fn invert(&self) -> Self {
+        Pos::new(WIDTH - self.x - 1, HEIGHT - self.y - 1)
+    }
+}
+
+pub struct BoardIterator {
+    i: usize,
+    j: usize,
+}
+
+impl Iterator for BoardIterator {
+    type Item = Pos;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (i, j) = (self.i, self.j);
+        if i < WIDTH - 1 {
+            self.i += 1;
+        } else {
+            self.i = 0;
+            self.j += 1;
+        }
+
+        if j == HEIGHT {
+            return None;
+        };
+        return Some(Pos::new(i, j));
+    }
+}
+
+pub fn board_iterator() -> BoardIterator {
+    BoardIterator { i: 0, j: 0 }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum Direction {
     North,

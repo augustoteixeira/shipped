@@ -4,21 +4,20 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::{FullEntity, MovementType, Team};
-use crate::state::geometry::Pos;
+use crate::state::geometry::{board_iterator, Pos};
 use crate::state::materials::Materials;
-use crate::state::state::State;
+use crate::state::state::{State, Tile};
 
 // TODO: Factor this code
 pub async fn draw_materials(
     mat: Materials,
     h_displace: f32,
     v_displace: f32,
-    j: usize,
-    i: usize,
+    pos: Pos,
     tileset: &Texture2D,
 ) {
     let mut rng =
-        ChaCha8Rng::seed_from_u64((i * HEIGHT + j).try_into().unwrap());
+        ChaCha8Rng::seed_from_u64((pos.x * HEIGHT + pos.y).try_into().unwrap());
     for _ in 0..mat.carbon {
         let draw_params = DrawTextureParams {
             source: Some(Rect {
@@ -31,8 +30,8 @@ pub async fn draw_materials(
         };
         draw_texture_ex(
             *tileset,
-            h_displace + ((16 * j) + rng.gen_range(0..13)) as f32,
-            v_displace + ((16 * i) + rng.gen_range(0..13)) as f32,
+            h_displace + ((16 * pos.x) + rng.gen_range(0..13)) as f32,
+            v_displace + ((16 * pos.y) + rng.gen_range(0..13)) as f32,
             WHITE,
             draw_params,
         );
@@ -49,8 +48,8 @@ pub async fn draw_materials(
         };
         draw_texture_ex(
             *tileset,
-            h_displace + ((16 * j) + rng.gen_range(0..13)) as f32,
-            v_displace + ((16 * i) + rng.gen_range(0..13)) as f32,
+            h_displace + ((16 * pos.x) + rng.gen_range(0..13)) as f32,
+            v_displace + ((16 * pos.y) + rng.gen_range(0..13)) as f32,
             WHITE,
             draw_params,
         );
@@ -67,8 +66,8 @@ pub async fn draw_materials(
         };
         draw_texture_ex(
             *tileset,
-            h_displace + ((16 * j) + rng.gen_range(0..13)) as f32,
-            v_displace + ((16 * i) + rng.gen_range(0..13)) as f32,
+            h_displace + ((16 * pos.x) + rng.gen_range(0..13)) as f32,
+            v_displace + ((16 * pos.y) + rng.gen_range(0..13)) as f32,
             WHITE,
             draw_params,
         );
@@ -85,8 +84,8 @@ pub async fn draw_materials(
         };
         draw_texture_ex(
             *tileset,
-            h_displace + ((16 * j) + rng.gen_range(0..13)) as f32,
-            v_displace + ((16 * i) + rng.gen_range(0..13)) as f32,
+            h_displace + ((16 * pos.x) + rng.gen_range(0..13)) as f32,
+            v_displace + ((16 * pos.y) + rng.gen_range(0..13)) as f32,
             WHITE,
             draw_params,
         );
@@ -97,8 +96,7 @@ pub async fn draw_entity(
     entity: Option<&FullEntity>,
     h_displace: f32,
     v_displace: f32,
-    j: usize,
-    i: usize,
+    pos: Pos,
     tileset: &Texture2D,
 ) {
     if let Some(e) = entity {
@@ -119,15 +117,15 @@ pub async fn draw_entity(
         };
         draw_texture_ex(
             *tileset,
-            h_displace + (j as f32) * 16.,
-            v_displace + (i as f32) * 16.,
+            h_displace + (pos.x as f32) * 16.,
+            v_displace + (pos.y as f32) * 16.,
             WHITE,
             draw_params,
         );
         if e.tokens > 0 {
             draw_rectangle(
-                h_displace + (j as f32) * 16.,
-                v_displace + (i as f32) * 16.,
+                h_displace + (pos.x as f32) * 16.,
+                v_displace + (pos.y as f32) * 16.,
                 2.0,
                 2.0,
                 LIGHTGRAY,
@@ -190,34 +188,38 @@ pub async fn draw_floor(
     }
 }
 
-pub async fn draw_map(
+pub async fn draw_mat_map(
+    tiles: &Vec<Tile>,
+    h_displace: f32,
+    v_displace: f32,
+    tileset: &Texture2D,
+) {
+    for pos in board_iterator() {
+        draw_materials(
+            tiles[pos.to_index()].materials.clone(),
+            h_displace,
+            v_displace,
+            pos,
+            &tileset,
+        )
+        .await;
+    }
+}
+
+pub async fn draw_ent_map(
     state: &State,
     h_displace: f32,
     v_displace: f32,
     tileset: &Texture2D,
 ) {
-    let mut pos: Pos;
-    for i in 0..WIDTH {
-        for j in 0..HEIGHT {
-            pos = Pos::new(i, j);
-            draw_materials(
-                state.tiles[pos.to_index()].materials.clone(),
-                h_displace,
-                v_displace,
-                i,
-                j,
-                &tileset,
-            )
-            .await;
-            draw_entity(
-                state.get_entity_option(pos),
-                h_displace,
-                v_displace,
-                i,
-                j,
-                &tileset,
-            )
-            .await;
-        }
+    for pos in board_iterator() {
+        draw_entity(
+            state.get_entity_option(pos),
+            h_displace,
+            v_displace,
+            pos,
+            &tileset,
+        )
+        .await;
     }
 }
