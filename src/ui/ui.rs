@@ -138,30 +138,44 @@ impl Ui for Text {
 pub struct Button<T: Clone + core::fmt::Debug> {
     pub rect: Rect,
     label: String,
+    active: bool,
+    alert: bool,
     command: T,
 }
 
 #[async_trait]
 impl<T: Sync + Clone + core::fmt::Debug> Ui for Button<T> {
     type Command = T;
-    type Builder = (String, T);
+    type Builder = (String, T, bool, bool);
 
-    fn new(rect: Rect, builder: (String, T)) -> Self {
+    fn new(rect: Rect, builder: (String, T, bool, bool)) -> Self {
         Button {
             rect,
             label: builder.0,
             command: builder.1,
+            active: builder.2,
+            alert: builder.3,
         }
     }
+
     async fn draw(&self) {
-        draw_rectangle_lines(
+        draw_rectangle(
             self.rect.x,
             self.rect.y,
             self.rect.w,
             self.rect.h,
-            4.0,
-            DARKGREEN,
+            Color::new(0.0, 0.15, 0.0, 1.0),
         );
+        if self.active {
+            draw_rectangle_lines(
+                self.rect.x,
+                self.rect.y,
+                self.rect.w,
+                self.rect.h,
+                4.0,
+                if self.alert { RED } else { DARKGREEN },
+            );
+        }
         let TextDimensions {
             width: t_w,
             height: t_h,
@@ -177,9 +191,11 @@ impl<T: Sync + Clone + core::fmt::Debug> Ui for Button<T> {
     }
 
     fn process_input(&mut self, input: Input) -> Option<T> {
-        if let Input::Click(MouseButton::Left, (x, y)) = input {
-            if in_rectangle(x, y, &self.rect) {
-                return Some(self.command.clone());
+        if self.active {
+            if let Input::Click(MouseButton::Left, (x, y)) = input {
+                if in_rectangle(x, y, &self.rect) {
+                    return Some(self.command.clone());
+                }
             }
         }
         None
@@ -191,19 +207,46 @@ pub struct ButtonPanel<T: Clone + core::fmt::Debug> {
     pub buttons: Vec<Button<T>>,
 }
 
+impl<T: Clone + core::fmt::Debug> ButtonPanel<T> {
+    pub fn append(&mut self, other: &mut ButtonPanel<T>) {
+        self.buttons.append(&mut other.buttons);
+    }
+
+    pub fn push(&mut self, button: Button<T>) {
+        self.buttons.push(button);
+    }
+}
+
 #[async_trait]
 impl<T: Sync + Clone + core::fmt::Debug + Send> Ui for ButtonPanel<T> {
     type Command = T;
-    type Builder = Vec<(Rect, String, T)>;
+    type Builder = (Vec<Rect>, Vec<String>, Vec<T>, Vec<bool>, Vec<bool>);
 
-    fn new(_: Rect, builder: Vec<(Rect, String, T)>) -> Self {
+    fn new(
+        _: Rect,
+        builder: (Vec<Rect>, Vec<String>, Vec<T>, Vec<bool>, Vec<bool>),
+    ) -> Self {
+        let zipped: Vec<((((Rect, String), T), bool), bool)> = zip(
+            zip(zip(zip(builder.0, builder.1), builder.2), builder.3),
+            builder.4,
+        )
+        .into_iter()
+        .collect();
+        let flattened: Vec<(Rect, String, T, bool, bool)> = zipped
+            .into_iter()
+            .map(|((((r, l), c), ac), al)| {
+                (trim_margins(r, 0.1, 0.1, 0.1, 0.1), l, c, ac, al)
+            })
+            .collect();
         ButtonPanel {
-            buttons: builder
+            buttons: flattened
                 .into_iter()
-                .map(|(rect, s, t)| Button {
+                .map(|(rect, s, t, act, alrt)| Button {
                     rect,
                     label: s,
                     command: t,
+                    active: act,
+                    alert: alrt,
                 })
                 .collect(),
         }
@@ -309,7 +352,38 @@ impl<
     }
 }
 
-// pub struct ButtonVec {
-//     pub rect: Rect,
-//     pub components: [[C; N]; M],
-// }
+pub fn build_incrementer<T: Sync + Clone + core::fmt::Debug + Send>(
+    rect: &Rect,
+    label: String,
+    value: usize,
+    comm_up: T,
+    comm_down: T,
+) -> ButtonPanel<T> {
+    let rects_vertical =
+        split(&rect.clone(), vec![0.0, 1.0], vec![0.0, 0.33, 0.66, 1.0]);
+    let rects_pm =
+        split(&rects_vertical[2], vec![0.0, 0.5, 1.0], vec![0.0, 1.0]);
+    let rects = vec![
+        rects_vertical[0].clone(),
+        rects_vertical[1].clone(),
+        rects_pm[0].clone(),
+        rects_pm[1].clone(),
+    ];
+    let labels = vec![
+        label,
+        format!("{:05}", value,).as_str().to_string(),
+        "^".to_string(),
+        "v".to_string(),
+    ];
+    let commands = vec![comm_up.clone(), comm_up.clone(), comm_up, comm_down];
+    ButtonPanel::<T>::new(
+        rect.clone(),
+        (
+            rects,
+            labels,
+            commands,
+            [false, false, true, (value > 0)].into(),
+            [false; 4].into(),
+        ),
+    )
+}

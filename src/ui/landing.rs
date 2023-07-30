@@ -37,11 +37,26 @@ fn button_grid(rect: Rect) -> Grid<1, 5, Button<Selection>> {
     Grid::new(
         trim_margins(rect, 0.3, 0.3, 0.3, 0.3),
         [
-            [("Load Battlefield".to_string(), Selection::LoadBF)],
-            [("Create Battlefield".to_string(), Selection::NewBF)],
-            [("Upload Code".to_string(), Selection::UploadCode)],
-            [("Credits".to_string(), Selection::Credits)],
-            [("Quit".to_string(), Selection::Quit)],
+            [(
+                "Load Battlefield".to_string(),
+                Selection::LoadBF,
+                true,
+                false,
+            )],
+            [(
+                "Create Battlefield".to_string(),
+                Selection::NewBF,
+                true,
+                false,
+            )],
+            [(
+                "Upload Code".to_string(),
+                Selection::UploadCode,
+                true,
+                false,
+            )],
+            [("Credits".to_string(), Selection::Credits, true, false)],
+            [("Quit".to_string(), Selection::Quit, true, false)],
         ],
     )
 }

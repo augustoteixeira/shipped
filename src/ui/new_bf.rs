@@ -7,11 +7,11 @@ use init_array::init_array;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-use std::iter::zip;
 
 use super::canvas::{draw_floor, draw_mat_map};
 use super::ui::{
-    draw_centered_text, split, trim_margins, ButtonPanel, Input, Rect, Ui,
+    build_incrementer, draw_centered_text, split, Button, ButtonPanel, Input,
+    Rect, Ui,
 };
 use crate::state::constants::{HEIGHT, NUM_SUB_ENTITIES, WIDTH};
 use crate::state::entity::{BareEntity, FullEntity, HalfEntity};
@@ -21,6 +21,8 @@ use crate::state::state::Tile;
 
 const XDISPL: f32 = 800.0;
 const YDISPL: f32 = 30.0;
+
+const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
 
 #[derive(Clone, Debug)]
 pub enum MatName {
@@ -80,107 +82,140 @@ pub struct NewBF {
     entities: [(EntityStates, usize); NUM_SUB_ENTITIES],
     floor: [usize; WIDTH * HEIGHT],
     tileset: Texture2D,
-    main_panel: ButtonPanel<Command>,
+    panel: ButtonPanel<Command>,
     bot_panels: [ButtonPanel<Command>; NUM_SUB_ENTITIES],
 }
 
-const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
+impl NewBF {
+    fn build_material_panel(&self) -> ButtonPanel<Command> {
+        let rects: Vec<Rect> = split(
+            &self.rect,
+            (0..5).map(|p| (p as f32) * 0.1).collect(),
+            vec![0.01, 0.175],
+        );
+        let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
+            &rects[0],
+            "Carbon".to_string(),
+            self.materials.carbon,
+            Command::MatPM(MatName::Carbon, Sign::Plus),
+            Command::MatPM(MatName::Carbon, Sign::Minus),
+        );
+        panel.append(&mut build_incrementer::<Command>(
+            &rects[1],
+            "Silicon".to_string(),
+            self.materials.silicon,
+            Command::MatPM(MatName::Silicon, Sign::Plus),
+            Command::MatPM(MatName::Silicon, Sign::Minus),
+        ));
+        panel.append(&mut build_incrementer::<Command>(
+            &rects[2],
+            "Pluton.".to_string(),
+            self.materials.plutonium,
+            Command::MatPM(MatName::Plutonium, Sign::Plus),
+            Command::MatPM(MatName::Plutonium, Sign::Minus),
+        ));
+        panel.append(&mut build_incrementer::<Command>(
+            &rects[3],
+            "Copper".to_string(),
+            self.materials.copper,
+            Command::MatPM(MatName::Copper, Sign::Plus),
+            Command::MatPM(MatName::Copper, Sign::Minus),
+        ));
+        // Material brush buttons
+        let rects: Vec<Rect> = split(
+            &self.rect,
+            (0..5).map(|p| (p as f32) * 0.1).collect(),
+            vec![0.175, 0.25],
+        );
+        let labels = vec!["Use".to_string(); 4];
+        let commands = vec![
+            Command::MatBrush(MatName::Carbon),
+            Command::MatBrush(MatName::Silicon),
+            Command::MatBrush(MatName::Plutonium),
+            Command::MatBrush(MatName::Copper),
+        ];
+        let activities: Vec<bool> = [true; 4].into();
+        let mut alerts: Vec<bool> = [false; 4].into();
+        match self.brush {
+            Brush::Carbon => alerts[0] = true,
+            Brush::Silicon => alerts[1] = true,
+            Brush::Plutonium => alerts[2] = true,
+            Brush::Copper => alerts[3] = true,
+            Brush::Bot(_) => {}
+        }
+        let mut butts = ButtonPanel::<Command>::new(
+            Rect::new(0.0, 0.0, 1000.0, 1000.0),
+            (rects, labels, commands, activities, alerts),
+        );
+        panel.append(&mut butts);
+        panel
+    }
 
-pub fn main_panel(rect: &Rect) -> ButtonPanel<Command> {
-    // Material +- buttons
-    let mut rects: Vec<Rect> = split(
-        &rect,
-        (0..9).map(|p| (p as f32) * 0.05).collect(),
-        vec![0.1, 0.175],
-    );
-    let mut labels: Vec<String> = vec![
-        "^".to_string(),
-        "v".to_string(),
-        "^".to_string(),
-        "v".to_string(),
-        "^".to_string(),
-        "v".to_string(),
-        "^".to_string(),
-        "v".to_string(),
-    ];
-    let mut commands = vec![
-        Command::MatPM(MatName::Carbon, Sign::Plus),
-        Command::MatPM(MatName::Carbon, Sign::Minus),
-        Command::MatPM(MatName::Silicon, Sign::Plus),
-        Command::MatPM(MatName::Silicon, Sign::Minus),
-        Command::MatPM(MatName::Plutonium, Sign::Plus),
-        Command::MatPM(MatName::Plutonium, Sign::Minus),
-        Command::MatPM(MatName::Copper, Sign::Plus),
-        Command::MatPM(MatName::Copper, Sign::Minus),
-    ];
-    // Material brush buttons
-    rects.append(&mut split(
-        &rect,
-        (0..5).map(|p| (p as f32) * 0.1).collect(),
-        vec![0.175, 0.25],
-    ));
-    labels.append(&mut vec!["Use".to_string(); 4]);
-    commands.append(&mut vec![
-        Command::MatBrush(MatName::Carbon),
-        Command::MatBrush(MatName::Silicon),
-        Command::MatBrush(MatName::Plutonium),
-        Command::MatBrush(MatName::Copper),
-    ]);
-    // Token buttons
-    rects.append(&mut split(
-        &rect,
-        (2..7).map(|p| (p as f32) * 0.05).collect(),
-        vec![0.375, 0.45],
-    ));
-    labels.append(&mut vec![
-        "^".to_string(),
-        "v".to_string(),
-        "^".to_string(),
-        "v".to_string(),
-    ]);
-    commands.append(&mut vec![
-        Command::Token(TknButton::Tokens, Sign::Plus),
-        Command::Token(TknButton::Tokens, Sign::Minus),
-        Command::Token(TknButton::MinTkns, Sign::Plus),
-        Command::Token(TknButton::MinTkns, Sign::Minus),
-    ]);
-    // collect
-    let mut builder: Vec<(Rect, String, Command)> =
-        zip(zip(rects, labels), commands)
-            .into_iter()
-            .map(|((r, l), c)| (trim_margins(r, 0.1, 0.1, 0.1, 0.1), l, c))
-            .collect();
-    // map grid
-    builder.append(
-        &mut board_iterator()
-            .into_iter()
-            .map(|pos| -> (Rect, String, Command) {
-                (
-                    Rect::new(
-                        XDISPL + 16.0 * (pos.x as f32),
-                        YDISPL + 16.0 * (pos.y as f32),
-                        16.0,
-                        16.0,
-                    ),
-                    "".to_string(),
-                    Command::MapLeftClk(pos),
-                )
-            })
-            .collect(),
-    );
-    let buttons = ButtonPanel::<Command>::new(
-        Rect::new(0.0, 0.0, 1000.0, 1000.0),
-        builder,
-    );
-    return buttons;
+    fn build_token_panel(&self) -> ButtonPanel<Command> {
+        let rects = split(
+            &self.rect,
+            (1..7).map(|p| (p as f32) * 0.1).collect(),
+            vec![0.275, 0.45],
+        );
+        let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
+            &rects[0],
+            "Tokens".to_string(),
+            self.tokens,
+            Command::Token(TknButton::Tokens, Sign::Plus),
+            Command::Token(TknButton::Tokens, Sign::Minus),
+        );
+        panel.append(&mut build_incrementer(
+            &rects[1],
+            "Min Tks".to_string(),
+            self.min_tokens,
+            Command::Token(TknButton::MinTkns, Sign::Plus),
+            Command::Token(TknButton::MinTkns, Sign::Minus),
+        ));
+        panel
+    }
+
+    fn build_bot_panels(&self) -> [ButtonPanel<Command>; NUM_SUB_ENTITIES] {
+        init_array(|i| {
+            // bot panel
+            let bot_rect = split(
+                &self.rect,
+                (0..5).map(|p| (p as f32) * 0.1).collect(),
+                vec![0.575, 0.725],
+            )[i]
+                .clone();
+            bot_panel_builder(&bot_rect, i)
+        })
+    }
+
+    fn update_main_panel(&mut self) {
+        let mut button_panel = self.build_material_panel();
+        for pos in board_iterator().into_iter() {
+            button_panel.push(Button::<Command>::new(
+                Rect::new(
+                    XDISPL + 16.0 * (pos.x as f32),
+                    YDISPL + 16.0 * (pos.y as f32),
+                    16.0,
+                    16.0,
+                ),
+                ("".to_string(), Command::MapLeftClk(pos), true, false),
+            ))
+        }
+        button_panel.append(&mut self.build_token_panel());
+        self.panel = button_panel;
+        self.bot_panels = self.build_bot_panels();
+    }
 }
 
-fn bot_panel_builder(
-    rect: &Rect,
-    index: usize,
-) -> Vec<(Rect, String, Command)> {
+fn bot_panel_builder(rect: &Rect, index: usize) -> ButtonPanel<Command> {
     let rects: Vec<Rect> =
         split(&rect, vec![0.0, 0.5, 1.0], vec![0.0, 0.5, 1.0]);
+    let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
+        &rects[0],
+        format!("Bot {}", index).to_string(),
+        0,
+        Command::BotNumber(index, Sign::Plus),
+        Command::BotNumber(index, Sign::Minus),
+    );
     let labels: Vec<String> = vec![
         "^".to_string(),
         "v".to_string(),
@@ -193,28 +228,11 @@ fn bot_panel_builder(
         Command::BotBrush(index),
         Command::BotBrush(index),
     ];
-    zip(zip(rects, labels), commands)
-        .into_iter()
-        .map(|((r, l), c)| (trim_margins(r, 0.1, 0.1, 0.1, 0.1), l, c))
-        .collect()
-}
-
-fn build_bot_panels(rect: &Rect) -> [ButtonPanel<Command>; NUM_SUB_ENTITIES] {
-    init_array(|i| {
-        // bot panel
-        let bot_rect = split(
-            &rect,
-            (0..5).map(|p| (p as f32) * 0.1).collect(),
-            vec![0.575, 0.725],
-        )[i]
-            .clone();
-        let builder: Vec<(Rect, String, Command)> =
-            bot_panel_builder(&bot_rect, i);
-        ButtonPanel::<Command>::new(
-            Rect::new(0.0, 0.0, 1000.0, 1000.0),
-            builder,
-        )
-    })
+    ButtonPanel::<Command>::new(
+        Rect::new(0.0, 0.0, 1000.0, 1000.0),
+        (rects, labels, commands, [true; 8].into(), [false; 8].into()),
+    );
+    panel
 }
 
 #[async_trait]
@@ -230,10 +248,14 @@ impl Ui for NewBF {
         for i in 0..(WIDTH * HEIGHT) {
             floor[i] = rng.gen_range(0..7);
         }
-        let main_panel = main_panel(&rect);
-        let bot_panels = build_bot_panels(&rect);
-        NewBF {
-            rect,
+        let bot_panels = init_array(|_| {
+            ButtonPanel::new(
+                rect.clone(),
+                (vec![], vec![], vec![], vec![], vec![]),
+            )
+        });
+        let mut new_bf = NewBF {
+            rect: rect.clone(),
             materials: Materials {
                 carbon: 0,
                 silicon: 0,
@@ -257,74 +279,23 @@ impl Ui for NewBF {
             entities: init_array(|_| (EntityStates::Empty, 0)),
             floor,
             tileset,
-            main_panel,
+            panel: ButtonPanel::new(
+                rect,
+                (vec![], vec![], vec![], vec![], vec![]),
+            ),
             bot_panels,
-        }
+        };
+        new_bf.update_main_panel();
+        new_bf
     }
 
     async fn draw(&self) {
-        self.main_panel.draw().await;
+        self.panel.draw().await;
         for panel in self.bot_panels.iter() {
             panel.draw().await;
         }
         draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
         draw_mat_map(&self.tiles, XDISPL, YDISPL, &self.tileset).await;
-        let mat_rect = split(
-            &self.rect,
-            (0..5).map(|p| (p as f32) * 0.1).collect(),
-            vec![0.0, 0.05, 0.1],
-        );
-        draw_centered_text(&mat_rect[0], "Carbon").await;
-        draw_centered_text(&mat_rect[1], "Silicon").await;
-        draw_centered_text(&mat_rect[2], "Plutonion").await;
-        draw_centered_text(&mat_rect[3], "Copper").await;
-        draw_centered_text(
-            &mat_rect[4],
-            format!("{:05}", self.materials.carbon,).as_str(),
-        )
-        .await;
-        draw_centered_text(
-            &mat_rect[5],
-            format!("{:05}", self.materials.silicon,).as_str(),
-        )
-        .await;
-        draw_centered_text(
-            &mat_rect[6],
-            format!("{:05}", self.materials.plutonium,).as_str(),
-        )
-        .await;
-        draw_centered_text(
-            &mat_rect[7],
-            format!("{:05}", self.materials.copper,).as_str(),
-        )
-        .await;
-        let tk_rect = split(
-            &self.rect,
-            (1..4).map(|p| (p as f32) * 0.1).collect(),
-            vec![0.275, 0.325, 0.375],
-        );
-        draw_centered_text(&tk_rect[0], "Tokens").await;
-        draw_centered_text(&tk_rect[1], "Min Tkns").await;
-        draw_centered_text(
-            &tk_rect[2],
-            format!("{:05}", self.tokens,).as_str(),
-        )
-        .await;
-        draw_centered_text(
-            &tk_rect[3],
-            format!("{:05}", self.min_tokens,).as_str(),
-        )
-        .await;
-        let sel = match self.brush {
-            Brush::Carbon => &self.main_panel.buttons[8],
-            Brush::Silicon => &self.main_panel.buttons[9],
-            Brush::Plutonium => &self.main_panel.buttons[10],
-            Brush::Copper => &self.main_panel.buttons[11],
-            Brush::Bot(i) => &self.bot_panels[i].buttons[3],
-        }
-        .rect
-        .clone();
-        draw_rectangle_lines(sel.x, sel.y, sel.w, sel.h, 6.0, RED);
         let bot_rect = split(
             &self.rect,
             (0..5).map(|p| (p as f32) * 0.1).collect(),
@@ -383,7 +354,7 @@ impl Ui for NewBF {
                     break 'get_command Some(c);
                 }
             }
-            self.main_panel.process_input(input.clone())
+            self.panel.process_input(input.clone())
         };
         match command {
             None => {}
@@ -479,6 +450,7 @@ impl Ui for NewBF {
             },
             Some(Command::BotBrush(i)) => self.brush = Brush::Bot(i),
         };
+        self.update_main_panel();
         if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) = input {
             Some(())
         } else {
