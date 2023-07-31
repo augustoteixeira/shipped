@@ -10,7 +10,6 @@ UI
 --
 
 - finish squad functionality
-  - add map left click for bots
   - make new_bf an enum with "EditBot(i)" variant
   - make edit_bot functionality
 - send view to ui crate

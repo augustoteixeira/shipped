@@ -7,7 +7,7 @@ use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
-use super::canvas::{draw_floor, draw_mat_map};
+use super::canvas::{draw_entity, draw_floor, draw_mat_map};
 use super::ui::{
     build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect,
     Ui,
@@ -150,7 +150,6 @@ pub struct NewBF {
     floor: [usize; WIDTH * HEIGHT],
     tileset: Texture2D,
     panel: ButtonPanel<Command>,
-    //bot_panels: [ButtonPanel<Command>; NUM_TEMPLATES],
 }
 
 impl NewBF {
@@ -403,6 +402,33 @@ impl Ui for NewBF {
         draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
         draw_mat_map(&self.tiles, XDISPL, YDISPL, &self.tileset).await;
         draw_rectangle(XDISPL, YDISPL, 16.0 * 60.0, 16.0 * 30.0, SMOKE);
+        for pos in board_iterator() {
+            if pos.y >= HEIGHT / 2 {
+                if let Some(id) = &self.tiles[pos.to_index()].entity_id {
+                    if let EntityStates::Full(e, _) = &self.entities[*id] {
+                        draw_entity(
+                            Some(e),
+                            XDISPL,
+                            YDISPL,
+                            pos,
+                            &self.tileset,
+                        )
+                        .await;
+                        let mut f = e.clone();
+                        f.team = Team::Red;
+                        draw_entity(
+                            Some(&f),
+                            XDISPL,
+                            YDISPL,
+                            Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
+                            &self.tileset,
+                        )
+                        .await;
+                    }
+                }
+            }
+        }
+
         for i in 0..=WIDTH {
             draw_line(
                 XDISPL + (i as f32) * 16.0,
@@ -509,7 +535,9 @@ impl Ui for NewBF {
                     self.tiles[pos.to_index()].materials.copper += 1;
                     self.tiles[pos.invert().to_index()].materials.copper += 1;
                 }
-                _ => {}
+                Brush::Bot(i) => {
+                    self.tiles[pos.to_index()].entity_id = Some(i);
+                }
             },
             Some(Command::BotNumber(i, sign)) => match &mut self.entities[i] {
                 EntityStates::Empty => {}
