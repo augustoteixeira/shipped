@@ -10,8 +10,8 @@ use rand_chacha::ChaCha8Rng;
 
 use super::canvas::{draw_floor, draw_mat_map};
 use super::ui::{
-    build_incrementer, draw_centered_text, split, trim_margins, Button,
-    ButtonPanel, Input, Rect, Ui,
+    build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect,
+    Ui,
 };
 use crate::state::constants::{HEIGHT, NUM_SUB_ENTITIES, WIDTH};
 use crate::state::entity::{BareEntity, FullEntity, HalfEntity};
@@ -88,7 +88,7 @@ pub struct NewBF {
 
 impl NewBF {
     fn build_material_panel(&self, rect: &Rect) -> ButtonPanel<Command> {
-        let rects: Vec<Rect> = split(
+        let mut rects: Vec<Rect> = split(
             &rect.clone(),
             vec![0.0, 0.25, 0.5, 0.75, 1.0],
             vec![0.0, 0.75],
@@ -122,11 +122,14 @@ impl NewBF {
             Command::MatPM(MatName::Copper, Sign::Minus),
         ));
         // Material brush buttons
-        let rects: Vec<Rect> = split(
-            &self.rect,
-            (0..5).map(|p| (p as f32) * 0.1).collect(),
-            vec![0.175, 0.25],
-        );
+        rects = split(
+            &rect.clone(),
+            vec![0.0, 0.25, 0.5, 0.75, 1.0],
+            vec![0.75, 1.0],
+        )
+        .into_iter()
+        //.map(|r| split(&r.clone(), vec![0.0, 1.0], vec![0.75, 1.0])[0].clone())
+        .collect();
         let labels = vec!["Use".to_string(); 4];
         let commands = vec![
             Command::MatBrush(MatName::Carbon),
@@ -201,7 +204,7 @@ impl NewBF {
         let commands = vec![Command::BotBrush(index), Command::BotBrush(index)];
         ButtonPanel::<Command>::new(
             Rect::new(0.0, 0.0, 1000.0, 1000.0),
-            (rects, labels, commands, [true; 8].into(), [false; 8].into()),
+            (rects, labels, commands, [true; 2].into(), [false; 2].into()),
         );
         panel
     }
@@ -285,35 +288,6 @@ impl Ui for NewBF {
         self.panel.draw().await;
         draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
         draw_mat_map(&self.tiles, XDISPL, YDISPL, &self.tileset).await;
-        let bot_rect = split(
-            &self.rect,
-            (0..5).map(|p| (p as f32) * 0.1).collect(),
-            vec![0.475, 0.525, 0.575],
-        );
-        draw_centered_text(&bot_rect[0], "Bot 0").await;
-        draw_centered_text(&bot_rect[1], "Bot 1").await;
-        draw_centered_text(&bot_rect[2], "Bot 2").await;
-        draw_centered_text(&bot_rect[3], "Bot 3").await;
-        draw_centered_text(
-            &bot_rect[4],
-            format!("{:03}", self.entities[0].1).as_str(),
-        )
-        .await;
-        draw_centered_text(
-            &bot_rect[5],
-            format!("{:03}", self.entities[1].1).as_str(),
-        )
-        .await;
-        draw_centered_text(
-            &bot_rect[6],
-            format!("{:03}", self.entities[2].1).as_str(),
-        )
-        .await;
-        draw_centered_text(
-            &bot_rect[7],
-            format!("{:03}", self.entities[3].1).as_str(),
-        )
-        .await;
         draw_rectangle(XDISPL, YDISPL, 16.0 * 60.0, 16.0 * 30.0, SMOKE);
         for i in 0..=WIDTH {
             draw_line(
