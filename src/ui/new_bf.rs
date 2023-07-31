@@ -83,7 +83,7 @@ pub struct NewBF {
     floor: [usize; WIDTH * HEIGHT],
     tileset: Texture2D,
     panel: ButtonPanel<Command>,
-    bot_panels: [ButtonPanel<Command>; NUM_SUB_ENTITIES],
+    //bot_panels: [ButtonPanel<Command>; NUM_SUB_ENTITIES],
 }
 
 impl NewBF {
@@ -171,17 +171,17 @@ impl NewBF {
         panel
     }
 
-    fn build_bot_panels(&self) -> [ButtonPanel<Command>; NUM_SUB_ENTITIES] {
-        init_array(|i| {
-            // bot panel
-            let bot_rect = split(
-                &self.rect,
-                (0..5).map(|p| (p as f32) * 0.1).collect(),
-                vec![0.575, 0.725],
-            )[i]
-                .clone();
-            self.bot_panel_builder(&bot_rect, i)
-        })
+    fn build_bot_panels(&self, rect: &Rect) -> ButtonPanel<Command> {
+        let mut panel = ButtonPanel::new(
+            rect.clone(),
+            (vec![], vec![], vec![], vec![], vec![]),
+        );
+        let bot_rect =
+            split(rect, vec![0.0, 0.25, 0.5, 0.75, 1.0], vec![0.0, 1.0]);
+        for i in 0..NUM_SUB_ENTITIES {
+            panel.append(&mut self.bot_panel_builder(&bot_rect[i], i));
+        }
+        panel
     }
 
     fn bot_panel_builder(
@@ -189,27 +189,16 @@ impl NewBF {
         rect: &Rect,
         index: usize,
     ) -> ButtonPanel<Command> {
-        let rects: Vec<Rect> =
-            split(rect, vec![0.0, 0.5, 1.0], vec![0.0, 0.5, 1.0]);
-        let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
+        let rects: Vec<Rect> = split(rect, vec![0.0, 1.0], vec![0.0, 1.0]);
+        let panel: ButtonPanel<Command> = build_incrementer::<Command>(
             &rects[0],
             format!("Bot {}", index).to_string(),
             0,
             Command::BotNumber(index, Sign::Plus),
             Command::BotNumber(index, Sign::Minus),
         );
-        let labels: Vec<String> = vec![
-            "^".to_string(),
-            "v".to_string(),
-            "Edt".to_string(),
-            "Sel".to_string(),
-        ];
-        let commands = vec![
-            Command::BotNumber(index, Sign::Plus),
-            Command::BotNumber(index, Sign::Minus),
-            Command::BotBrush(index),
-            Command::BotBrush(index),
-        ];
+        let labels: Vec<String> = vec!["Edt".to_string(), "Sel".to_string()];
+        let commands = vec![Command::BotBrush(index), Command::BotBrush(index)];
         ButtonPanel::<Command>::new(
             Rect::new(0.0, 0.0, 1000.0, 1000.0),
             (rects, labels, commands, [true; 8].into(), [false; 8].into()),
@@ -229,6 +218,7 @@ impl NewBF {
             split(&left_rect, vec![0.0, 1.0], vec![0.0, 0.25, 0.5, 0.75, 1.0]);
         let mut button_panel = self.build_material_panel(&rects[0]);
         button_panel.append(&mut self.build_token_panel(&rects[1]));
+        button_panel.append(&mut self.build_bot_panels(&rects[2]));
         for pos in board_iterator().into_iter() {
             button_panel.push(Button::<Command>::new(
                 Rect::new(
@@ -241,7 +231,6 @@ impl NewBF {
             ))
         }
         self.panel = button_panel;
-        self.bot_panels = self.build_bot_panels();
     }
 }
 
@@ -258,12 +247,6 @@ impl Ui for NewBF {
         for i in 0..(WIDTH * HEIGHT) {
             floor[i] = rng.gen_range(0..7);
         }
-        let bot_panels = init_array(|_| {
-            ButtonPanel::new(
-                rect.clone(),
-                (vec![], vec![], vec![], vec![], vec![]),
-            )
-        });
         let mut new_bf = NewBF {
             rect: rect.clone(),
             materials: Materials {
@@ -293,7 +276,6 @@ impl Ui for NewBF {
                 rect,
                 (vec![], vec![], vec![], vec![], vec![]),
             ),
-            bot_panels,
         };
         new_bf.update_main_panel();
         new_bf
@@ -301,9 +283,6 @@ impl Ui for NewBF {
 
     async fn draw(&self) {
         self.panel.draw().await;
-        for panel in self.bot_panels.iter() {
-            panel.draw().await;
-        }
         draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
         draw_mat_map(&self.tiles, XDISPL, YDISPL, &self.tileset).await;
         let bot_rect = split(
@@ -357,15 +336,7 @@ impl Ui for NewBF {
     }
 
     fn process_input(&mut self, input: Input) -> Option<()> {
-        let command = 'get_command: {
-            for i in 0..NUM_SUB_ENTITIES {
-                let panel = &mut self.bot_panels[i];
-                if let Some(c) = panel.process_input(input.clone()) {
-                    break 'get_command Some(c);
-                }
-            }
-            self.panel.process_input(input.clone())
-        };
+        let command = self.panel.process_input(input.clone());
         match command {
             None => {}
             Some(Command::MatPM(mat_name, sign)) => match mat_name {
