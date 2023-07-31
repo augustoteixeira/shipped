@@ -3,7 +3,6 @@ extern crate rand_chacha;
 
 use async_trait::async_trait;
 use futures::executor::block_on;
-use init_array::init_array;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
@@ -13,8 +12,10 @@ use super::ui::{
     build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect,
     Ui,
 };
-use crate::state::constants::{HEIGHT, NUM_SUB_ENTITIES, WIDTH};
-use crate::state::entity::{BareEntity, FullEntity, HalfEntity};
+use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
+use crate::state::entity::{
+    Abilities, BareEntity, FullEntity, HalfEntity, MovementType, Team,
+};
 use crate::state::geometry::{board_iterator, Pos};
 use crate::state::materials::Materials;
 use crate::state::state::Tile;
@@ -23,6 +24,69 @@ const XDISPL: f32 = 800.0;
 const YDISPL: f32 = 30.0;
 
 const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
+
+fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
+    [
+        EntityStates::Empty,
+        EntityStates::Bare(
+            BareEntity {
+                tokens: 0,
+                team: Team::Blue,
+                pos: Pos::new(0, 0),
+                hp: 1,
+                inventory_size: 0,
+                materials: Materials {
+                    carbon: 0,
+                    silicon: 0,
+                    plutonium: 0,
+                    copper: 0,
+                },
+                abilities: None,
+            },
+            1,
+        ),
+        EntityStates::Half(
+            HalfEntity {
+                tokens: 0,
+                team: Team::Blue,
+                pos: Pos::new(0, 0),
+                hp: 1,
+                inventory_size: 0,
+                materials: Materials {
+                    carbon: 0,
+                    silicon: 0,
+                    plutonium: 0,
+                    copper: 0,
+                },
+                abilities: Some(Abilities {
+                    movement_type: MovementType::Walk,
+                    gun_damage: 0,
+                    drill_damage: 0,
+                    message: None,
+                    brain: [0, 0],
+                }),
+            },
+            2,
+        ),
+        EntityStates::Full(
+            FullEntity {
+                tokens: 0,
+                team: Team::Blue,
+                pos: Pos::new(0, 0),
+                hp: 1,
+                inventory_size: 0,
+                materials: Materials {
+                    carbon: 0,
+                    silicon: 0,
+                    plutonium: 0,
+                    copper: 0,
+                },
+                abilities: None,
+            },
+            3,
+        ),
+    ]
+}
 
 #[derive(Clone, Debug)]
 pub enum MatName {
@@ -61,14 +125,17 @@ pub enum Command {
     MapLeftClk(Pos),
     BotNumber(usize, Sign),
     BotBrush(usize),
+    BotEdit(usize),
+    BotAddSubs(usize),
+    BotDelete(usize),
 }
 
 #[derive(Debug)]
 pub enum EntityStates {
     Empty,
-    Bare(BareEntity),
-    Half(HalfEntity),
-    Full(FullEntity),
+    Bare(BareEntity, usize),
+    Half(HalfEntity, usize),
+    Full(FullEntity, usize),
 }
 
 #[derive(Debug)]
@@ -79,11 +146,11 @@ pub struct NewBF {
     min_tokens: usize,
     brush: Brush,
     tiles: Vec<Tile>,
-    entities: [(EntityStates, usize); NUM_SUB_ENTITIES],
+    entities: [EntityStates; NUM_TEMPLATES],
     floor: [usize; WIDTH * HEIGHT],
     tileset: Texture2D,
     panel: ButtonPanel<Command>,
-    //bot_panels: [ButtonPanel<Command>; NUM_SUB_ENTITIES],
+    //bot_panels: [ButtonPanel<Command>; NUM_TEMPLATES],
 }
 
 impl NewBF {
@@ -128,7 +195,6 @@ impl NewBF {
             vec![0.75, 1.0],
         )
         .into_iter()
-        //.map(|r| split(&r.clone(), vec![0.0, 1.0], vec![0.75, 1.0])[0].clone())
         .collect();
         let labels = vec!["Use".to_string(); 4];
         let commands = vec![
@@ -146,11 +212,11 @@ impl NewBF {
             Brush::Copper => alerts[3] = true,
             Brush::Bot(_) => {}
         }
-        let mut butts = ButtonPanel::<Command>::new(
+        let mut material_brush_buttons = ButtonPanel::<Command>::new(
             Rect::new(0.0, 0.0, 1000.0, 1000.0),
             (rects, labels, commands, activities, alerts),
         );
-        panel.append(&mut butts);
+        panel.append(&mut material_brush_buttons);
         panel
     }
 
@@ -181,31 +247,79 @@ impl NewBF {
         );
         let bot_rect =
             split(rect, vec![0.0, 0.25, 0.5, 0.75, 1.0], vec![0.0, 1.0]);
-        for i in 0..NUM_SUB_ENTITIES {
-            panel.append(&mut self.bot_panel_builder(&bot_rect[i], i));
+        for i in 0..NUM_TEMPLATES {
+            panel.append(&mut self.build_single_bot_panel(&bot_rect[i], i));
         }
         panel
     }
 
-    fn bot_panel_builder(
+    fn build_single_bot_panel(
         &self,
         rect: &Rect,
         index: usize,
     ) -> ButtonPanel<Command> {
-        let rects: Vec<Rect> = split(rect, vec![0.0, 1.0], vec![0.0, 1.0]);
-        let panel: ButtonPanel<Command> = build_incrementer::<Command>(
+        let rects: Vec<Rect> =
+            split(rect, vec![0.0, 1.0], vec![0.0, 0.5, 0.75, 1.0]);
+        // this function is a mess with respect to types
+        let mut panel = ButtonPanel::new(
+            rect.clone(),
+            (vec![], vec![], vec![], vec![], vec![]),
+        );
+        // return with Edit button if entity is empty
+        if let EntityStates::Empty = &self.entities[index] {
+            panel.push(Button::<Command>::new(
+                rect.clone(),
+                ("Edit".to_string(), Command::BotEdit(index), true, false),
+            ));
+            return panel;
+        };
+        // otherwise: fill in number of entities and +- buttons
+        let number: usize;
+        if let EntityStates::Bare(_, n)
+        | EntityStates::Half(_, n)
+        | EntityStates::Full(_, n) = &self.entities[index]
+        {
+            number = *n;
+        } else {
+            unreachable!()
+        }
+        panel.append(&mut build_incrementer::<Command>(
             &rects[0],
             format!("Bot {}", index).to_string(),
-            0,
+            number,
             Command::BotNumber(index, Sign::Plus),
             Command::BotNumber(index, Sign::Minus),
-        );
-        let labels: Vec<String> = vec!["Edt".to_string(), "Sel".to_string()];
-        let commands = vec![Command::BotBrush(index), Command::BotBrush(index)];
-        ButtonPanel::<Command>::new(
-            Rect::new(0.0, 0.0, 1000.0, 1000.0),
-            (rects, labels, commands, [true; 2].into(), [false; 2].into()),
-        );
+        ));
+        // edit button otherwise
+        if let EntityStates::Bare(_, _)
+        | EntityStates::Half(_, _)
+        | EntityStates::Full(_, _) = &self.entities[index]
+        {
+            panel.push(Button::<Command>::new(
+                trim_margins(rects[1].clone(), 0.2, 0.2, 0.1, 0.1),
+                ("Edit".to_string(), Command::BotEdit(index), true, false),
+            ));
+        }
+        // if full, add brush
+        match &self.entities[index] {
+            EntityStates::Full(_, _) => panel.push(Button::<Command>::new(
+                trim_margins(rects[2].clone(), 0.2, 0.2, 0.1, 0.1),
+                (
+                    "Use".to_string(),
+                    Command::BotBrush(index),
+                    true,
+                    (matches!(&self.brush, Brush::Bot(i) if index == *i)),
+                ),
+            )),
+            _ => {}
+        }
+        panel.append(&mut build_incrementer::<Command>(
+            &rects[0],
+            format!("Bot {}", index).to_string(),
+            number,
+            Command::BotNumber(index, Sign::Plus),
+            Command::BotNumber(index, Sign::Minus),
+        ));
         panel
     }
 
@@ -218,7 +332,7 @@ impl NewBF {
             0.05,
         );
         let rects: Vec<Rect> =
-            split(&left_rect, vec![0.0, 1.0], vec![0.0, 0.25, 0.5, 0.75, 1.0]);
+            split(&left_rect, vec![0.0, 1.0], vec![0.0, 0.25, 0.5, 0.85, 1.0]);
         let mut button_panel = self.build_material_panel(&rects[0]);
         button_panel.append(&mut self.build_token_panel(&rects[1]));
         button_panel.append(&mut self.build_bot_panels(&rects[2]));
@@ -272,7 +386,7 @@ impl Ui for NewBF {
                     },
                 })
                 .collect(),
-            entities: init_array(|_| (EntityStates::Empty, 0)),
+            entities: construct_entities(),
             floor,
             tileset,
             panel: ButtonPanel::new(
@@ -397,13 +511,21 @@ impl Ui for NewBF {
                 }
                 _ => {}
             },
-            Some(Command::BotNumber(i, sign)) => match sign {
-                Sign::Minus => {
-                    self.entities[i].1 = self.entities[i].1.saturating_sub(1)
-                }
-                Sign::Plus => self.entities[i].1 += 1,
+            Some(Command::BotNumber(i, sign)) => match &mut self.entities[i] {
+                EntityStates::Empty => {}
+                EntityStates::Bare(_, j)
+                | EntityStates::Half(_, j)
+                | EntityStates::Full(_, j) => match sign {
+                    Sign::Minus => *j = j.saturating_sub(1),
+                    Sign::Plus => *j += 1,
+                },
             },
             Some(Command::BotBrush(i)) => self.brush = Brush::Bot(i),
+            Some(Command::BotEdit(_)) => {}
+            Some(Command::BotAddSubs(_)) => {}
+            Some(Command::BotDelete(i)) => {
+                self.entities[i] = EntityStates::Empty
+            }
         };
         self.update_main_panel();
         if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) = input {

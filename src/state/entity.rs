@@ -81,7 +81,7 @@ impl<T> Entity<T> {
     }
 }
 
-pub type Half = [Option<u8>; NUM_SUB_ENTITIES];
+pub type Half = [u8; NUM_SUB_ENTITIES];
 
 pub type Code = Vec<u8>;
 

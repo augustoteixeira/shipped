@@ -39,7 +39,7 @@ fn random_entity(rng: &mut ChaCha8Rng) -> TemplateEntity {
                 pos: Pos::new(0, 0),
             }),
             brain: Full {
-                half: [None, None, None, None],
+                half: [0, 0],
                 code_index: 2,
                 gas: 2000,
             },
