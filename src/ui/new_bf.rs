@@ -10,8 +10,8 @@ use rand_chacha::ChaCha8Rng;
 
 use super::canvas::{draw_floor, draw_mat_map};
 use super::ui::{
-    build_incrementer, draw_centered_text, split, Button, ButtonPanel, Input,
-    Rect, Ui,
+    build_incrementer, draw_centered_text, split, trim_margins, Button,
+    ButtonPanel, Input, Rect, Ui,
 };
 use crate::state::constants::{HEIGHT, NUM_SUB_ENTITIES, WIDTH};
 use crate::state::entity::{BareEntity, FullEntity, HalfEntity};
@@ -87,11 +87,11 @@ pub struct NewBF {
 }
 
 impl NewBF {
-    fn build_material_panel(&self) -> ButtonPanel<Command> {
+    fn build_material_panel(&self, rect: &Rect) -> ButtonPanel<Command> {
         let rects: Vec<Rect> = split(
-            &self.rect,
-            (0..5).map(|p| (p as f32) * 0.1).collect(),
-            vec![0.01, 0.175],
+            &rect.clone(),
+            vec![0.0, 0.25, 0.5, 0.75, 1.0],
+            vec![0.0, 0.75],
         );
         let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
             &rects[0],
@@ -151,12 +151,9 @@ impl NewBF {
         panel
     }
 
-    fn build_token_panel(&self) -> ButtonPanel<Command> {
-        let rects = split(
-            &self.rect,
-            (1..7).map(|p| (p as f32) * 0.1).collect(),
-            vec![0.275, 0.45],
-        );
+    fn build_token_panel(&self, rect: &Rect) -> ButtonPanel<Command> {
+        let rects =
+            split(&rect.clone(), vec![0.25, 0.5, 0.75], vec![0.0, 0.75]);
         let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
             &rects[0],
             "Tokens".to_string(),
@@ -183,12 +180,55 @@ impl NewBF {
                 vec![0.575, 0.725],
             )[i]
                 .clone();
-            bot_panel_builder(&bot_rect, i)
+            self.bot_panel_builder(&bot_rect, i)
         })
     }
 
+    fn bot_panel_builder(
+        &self,
+        rect: &Rect,
+        index: usize,
+    ) -> ButtonPanel<Command> {
+        let rects: Vec<Rect> =
+            split(rect, vec![0.0, 0.5, 1.0], vec![0.0, 0.5, 1.0]);
+        let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
+            &rects[0],
+            format!("Bot {}", index).to_string(),
+            0,
+            Command::BotNumber(index, Sign::Plus),
+            Command::BotNumber(index, Sign::Minus),
+        );
+        let labels: Vec<String> = vec![
+            "^".to_string(),
+            "v".to_string(),
+            "Edt".to_string(),
+            "Sel".to_string(),
+        ];
+        let commands = vec![
+            Command::BotNumber(index, Sign::Plus),
+            Command::BotNumber(index, Sign::Minus),
+            Command::BotBrush(index),
+            Command::BotBrush(index),
+        ];
+        ButtonPanel::<Command>::new(
+            Rect::new(0.0, 0.0, 1000.0, 1000.0),
+            (rects, labels, commands, [true; 8].into(), [false; 8].into()),
+        );
+        panel
+    }
+
     fn update_main_panel(&mut self) {
-        let mut button_panel = self.build_material_panel();
+        let left_rect = trim_margins(
+            split(&self.rect, vec![0.0, 0.45, 1.0], vec![0.0, 1.0])[0].clone(),
+            0.05,
+            0.05,
+            0.05,
+            0.05,
+        );
+        let rects: Vec<Rect> =
+            split(&left_rect, vec![0.0, 1.0], vec![0.0, 0.25, 0.5, 0.75, 1.0]);
+        let mut button_panel = self.build_material_panel(&rects[0]);
+        button_panel.append(&mut self.build_token_panel(&rects[1]));
         for pos in board_iterator().into_iter() {
             button_panel.push(Button::<Command>::new(
                 Rect::new(
@@ -200,39 +240,9 @@ impl NewBF {
                 ("".to_string(), Command::MapLeftClk(pos), true, false),
             ))
         }
-        button_panel.append(&mut self.build_token_panel());
         self.panel = button_panel;
         self.bot_panels = self.build_bot_panels();
     }
-}
-
-fn bot_panel_builder(rect: &Rect, index: usize) -> ButtonPanel<Command> {
-    let rects: Vec<Rect> =
-        split(&rect, vec![0.0, 0.5, 1.0], vec![0.0, 0.5, 1.0]);
-    let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
-        &rects[0],
-        format!("Bot {}", index).to_string(),
-        0,
-        Command::BotNumber(index, Sign::Plus),
-        Command::BotNumber(index, Sign::Minus),
-    );
-    let labels: Vec<String> = vec![
-        "^".to_string(),
-        "v".to_string(),
-        "Edt".to_string(),
-        "Sel".to_string(),
-    ];
-    let commands = vec![
-        Command::BotNumber(index, Sign::Plus),
-        Command::BotNumber(index, Sign::Minus),
-        Command::BotBrush(index),
-        Command::BotBrush(index),
-    ];
-    ButtonPanel::<Command>::new(
-        Rect::new(0.0, 0.0, 1000.0, 1000.0),
-        (rects, labels, commands, [true; 8].into(), [false; 8].into()),
-    );
-    panel
 }
 
 #[async_trait]
