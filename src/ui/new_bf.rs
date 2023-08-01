@@ -8,6 +8,7 @@ use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
 use super::canvas::{draw_entity, draw_floor, draw_mat_map};
+use super::entity_edit::{EntityEdit, EntityEditCommand};
 use super::ui::{
     build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect,
     Ui,
@@ -24,6 +25,7 @@ const XDISPL: f32 = 800.0;
 const YDISPL: f32 = 30.0;
 
 const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
+const DARKSMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.5);
 
 fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
     [
@@ -119,6 +121,7 @@ pub enum TknButton {
 
 #[derive(Clone, Debug)]
 pub enum Command {
+    SaveAndExit,
     MatPM(MatName, Sign),
     MatBrush(MatName),
     Token(TknButton, Sign),
@@ -130,7 +133,7 @@ pub enum Command {
     BotDelete(usize),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum EntityStates {
     Empty,
     Bare(BareEntity, usize),
@@ -139,7 +142,14 @@ pub enum EntityStates {
 }
 
 #[derive(Debug)]
+enum Screen {
+    Map,
+    Entity(EntityEdit),
+}
+
+#[derive(Debug)]
 pub struct NewBF {
+    screen: Screen,
     rect: Rect,
     materials: Materials,
     tokens: usize,
@@ -335,6 +345,10 @@ impl NewBF {
         let mut button_panel = self.build_material_panel(&rects[0]);
         button_panel.append(&mut self.build_token_panel(&rects[1]));
         button_panel.append(&mut self.build_bot_panels(&rects[2]));
+        button_panel.push(Button::<Command>::new(
+            trim_margins(rects[3].clone(), 0.3, 0.3, 0.3, 0.3),
+            ("Save & Exit".to_string(), Command::SaveAndExit, true, false),
+        ));
         for pos in board_iterator().into_iter() {
             button_panel.push(Button::<Command>::new(
                 Rect::new(
@@ -364,6 +378,7 @@ impl Ui for NewBF {
             floor[i] = rng.gen_range(0..7);
         }
         let mut new_bf = NewBF {
+            screen: Screen::Entity(EntityEdit::new(rect.clone(), ())),
             rect: rect.clone(),
             materials: Materials {
                 carbon: 0,
@@ -428,7 +443,6 @@ impl Ui for NewBF {
                 }
             }
         }
-
         for i in 0..=WIDTH {
             draw_line(
                 XDISPL + (i as f32) * 16.0,
@@ -447,119 +461,156 @@ impl Ui for NewBF {
                 SMOKE,
             );
         }
+        match &self.screen {
+            Screen::Map => {}
+            Screen::Entity(ee) => {
+                draw_rectangle(
+                    self.rect.x,
+                    self.rect.y,
+                    self.rect.w,
+                    self.rect.w,
+                    DARKSMOKE,
+                );
+                ee.draw().await;
+            }
+        }
     }
 
     fn process_input(&mut self, input: Input) -> Option<()> {
-        let command = self.panel.process_input(input.clone());
-        match command {
-            None => {}
-            Some(Command::MatPM(mat_name, sign)) => match mat_name {
-                MatName::Carbon => match sign {
-                    Sign::Plus => {
-                        self.materials.carbon += 1;
+        match &mut self.screen {
+            Screen::Map => {
+                let command = self.panel.process_input(input.clone());
+                match command {
+                    None => {}
+                    Some(Command::MatPM(mat_name, sign)) => match mat_name {
+                        MatName::Carbon => match sign {
+                            Sign::Plus => {
+                                self.materials.carbon += 1;
+                            }
+                            Sign::Minus => {
+                                self.materials.carbon =
+                                    self.materials.carbon.saturating_sub(1);
+                            }
+                        },
+                        MatName::Silicon => match sign {
+                            Sign::Plus => {
+                                self.materials.silicon += 1;
+                            }
+                            Sign::Minus => {
+                                self.materials.silicon =
+                                    self.materials.silicon.saturating_sub(1);
+                            }
+                        },
+                        MatName::Plutonium => match sign {
+                            Sign::Plus => {
+                                self.materials.plutonium += 1;
+                            }
+                            Sign::Minus => {
+                                self.materials.plutonium =
+                                    self.materials.plutonium.saturating_sub(1);
+                            }
+                        },
+                        MatName::Copper => match sign {
+                            Sign::Plus => {
+                                self.materials.copper += 1;
+                            }
+                            Sign::Minus => {
+                                self.materials.copper =
+                                    self.materials.copper.saturating_sub(1);
+                            }
+                        },
+                    },
+                    Some(Command::MatBrush(mat)) => {
+                        self.brush = match mat {
+                            MatName::Carbon => Brush::Carbon,
+                            MatName::Silicon => Brush::Silicon,
+                            MatName::Plutonium => Brush::Plutonium,
+                            MatName::Copper => Brush::Copper,
+                        }
                     }
-                    Sign::Minus => {
-                        self.materials.carbon =
-                            self.materials.carbon.saturating_sub(1);
+                    Some(Command::Token(tk_button, sign)) => match tk_button {
+                        TknButton::Tokens => match sign {
+                            Sign::Plus => {
+                                self.tokens += 1;
+                            }
+                            Sign::Minus => {
+                                self.tokens = self.tokens.saturating_sub(1);
+                            }
+                        },
+                        TknButton::MinTkns => match sign {
+                            Sign::Plus => {
+                                self.min_tokens += 1;
+                            }
+                            Sign::Minus => {
+                                self.min_tokens =
+                                    self.min_tokens.saturating_sub(1);
+                            }
+                        },
+                    },
+                    Some(Command::MapLeftClk(pos)) => match self.brush {
+                        Brush::Carbon => {
+                            self.tiles[pos.to_index()].materials.carbon += 1;
+                            self.tiles[pos.invert().to_index()]
+                                .materials
+                                .carbon += 1;
+                        }
+                        Brush::Silicon => {
+                            self.tiles[pos.to_index()].materials.silicon += 1;
+                            self.tiles[pos.invert().to_index()]
+                                .materials
+                                .silicon += 1;
+                        }
+                        Brush::Plutonium => {
+                            self.tiles[pos.to_index()].materials.plutonium += 1;
+                            self.tiles[pos.invert().to_index()]
+                                .materials
+                                .plutonium += 1;
+                        }
+                        Brush::Copper => {
+                            self.tiles[pos.to_index()].materials.copper += 1;
+                            self.tiles[pos.invert().to_index()]
+                                .materials
+                                .copper += 1;
+                        }
+                        Brush::Bot(i) => {
+                            self.tiles[pos.to_index()].entity_id = Some(i);
+                        }
+                    },
+                    Some(Command::BotNumber(i, sign)) => {
+                        match &mut self.entities[i] {
+                            EntityStates::Empty => {}
+                            EntityStates::Bare(_, j)
+                            | EntityStates::Half(_, j)
+                            | EntityStates::Full(_, j) => match sign {
+                                Sign::Minus => *j = j.saturating_sub(1),
+                                Sign::Plus => *j += 1,
+                            },
+                        }
                     }
-                },
-                MatName::Silicon => match sign {
-                    Sign::Plus => {
-                        self.materials.silicon += 1;
+                    Some(Command::BotBrush(i)) => self.brush = Brush::Bot(i),
+                    Some(Command::BotEdit(_)) => {}
+                    Some(Command::BotAddSubs(_)) => {}
+                    Some(Command::BotDelete(i)) => {
+                        self.entities[i] = EntityStates::Empty
                     }
-                    Sign::Minus => {
-                        self.materials.silicon =
-                            self.materials.silicon.saturating_sub(1);
-                    }
-                },
-                MatName::Plutonium => match sign {
-                    Sign::Plus => {
-                        self.materials.plutonium += 1;
-                    }
-                    Sign::Minus => {
-                        self.materials.plutonium =
-                            self.materials.plutonium.saturating_sub(1);
-                    }
-                },
-                MatName::Copper => match sign {
-                    Sign::Plus => {
-                        self.materials.copper += 1;
-                    }
-                    Sign::Minus => {
-                        self.materials.copper =
-                            self.materials.copper.saturating_sub(1);
-                    }
-                },
-            },
-            Some(Command::MatBrush(mat)) => {
-                self.brush = match mat {
-                    MatName::Carbon => Brush::Carbon,
-                    MatName::Silicon => Brush::Silicon,
-                    MatName::Plutonium => Brush::Plutonium,
-                    MatName::Copper => Brush::Copper,
+                    Some(Command::SaveAndExit) => return Some(()),
+                };
+                self.update_main_panel();
+                if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) =
+                    input
+                {
+                    Some(())
+                } else {
+                    None
                 }
             }
-            Some(Command::Token(tk_button, sign)) => match tk_button {
-                TknButton::Tokens => match sign {
-                    Sign::Plus => {
-                        self.tokens += 1;
-                    }
-                    Sign::Minus => {
-                        self.tokens = self.tokens.saturating_sub(1);
-                    }
-                },
-                TknButton::MinTkns => match sign {
-                    Sign::Plus => {
-                        self.min_tokens += 1;
-                    }
-                    Sign::Minus => {
-                        self.min_tokens = self.min_tokens.saturating_sub(1);
-                    }
-                },
+            Screen::Entity(ee) => match &mut ee.process_input(input) {
+                Some(EntityEditCommand::Exit) => {
+                    self.screen = Screen::Map;
+                    None
+                }
+                _ => None,
             },
-            Some(Command::MapLeftClk(pos)) => match self.brush {
-                Brush::Carbon => {
-                    self.tiles[pos.to_index()].materials.carbon += 1;
-                    self.tiles[pos.invert().to_index()].materials.carbon += 1;
-                }
-                Brush::Silicon => {
-                    self.tiles[pos.to_index()].materials.silicon += 1;
-                    self.tiles[pos.invert().to_index()].materials.silicon += 1;
-                }
-                Brush::Plutonium => {
-                    self.tiles[pos.to_index()].materials.plutonium += 1;
-                    self.tiles[pos.invert().to_index()].materials.plutonium +=
-                        1;
-                }
-                Brush::Copper => {
-                    self.tiles[pos.to_index()].materials.copper += 1;
-                    self.tiles[pos.invert().to_index()].materials.copper += 1;
-                }
-                Brush::Bot(i) => {
-                    self.tiles[pos.to_index()].entity_id = Some(i);
-                }
-            },
-            Some(Command::BotNumber(i, sign)) => match &mut self.entities[i] {
-                EntityStates::Empty => {}
-                EntityStates::Bare(_, j)
-                | EntityStates::Half(_, j)
-                | EntityStates::Full(_, j) => match sign {
-                    Sign::Minus => *j = j.saturating_sub(1),
-                    Sign::Plus => *j += 1,
-                },
-            },
-            Some(Command::BotBrush(i)) => self.brush = Brush::Bot(i),
-            Some(Command::BotEdit(_)) => {}
-            Some(Command::BotAddSubs(_)) => {}
-            Some(Command::BotDelete(i)) => {
-                self.entities[i] = EntityStates::Empty
-            }
-        };
-        self.update_main_panel();
-        if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) = input {
-            Some(())
-        } else {
-            None
         }
     }
 }
