@@ -25,7 +25,7 @@ const XDISPL: f32 = 800.0;
 const YDISPL: f32 = 30.0;
 
 const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
-const DARKSMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.5);
+//const DARKSMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.5);
 
 fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
     [
@@ -378,7 +378,10 @@ impl Ui for NewBF {
             floor[i] = rng.gen_range(0..7);
         }
         let mut new_bf = NewBF {
-            screen: Screen::Entity(EntityEdit::new(rect.clone(), ())),
+            screen: Screen::Entity(EntityEdit::new(
+                trim_margins(rect.clone(), 0.15, 0.15, 0.15, 0.15),
+                construct_entities()[1].clone(),
+            )),
             rect: rect.clone(),
             materials: Materials {
                 carbon: 0,
@@ -468,8 +471,8 @@ impl Ui for NewBF {
                     self.rect.x,
                     self.rect.y,
                     self.rect.w,
-                    self.rect.w,
-                    DARKSMOKE,
+                    self.rect.h,
+                    SMOKE,
                 );
                 ee.draw().await;
             }
@@ -588,7 +591,18 @@ impl Ui for NewBF {
                         }
                     }
                     Some(Command::BotBrush(i)) => self.brush = Brush::Bot(i),
-                    Some(Command::BotEdit(_)) => {}
+                    Some(Command::BotEdit(i)) => {
+                        self.screen = Screen::Entity(EntityEdit::new(
+                            trim_margins(
+                                self.rect.clone(),
+                                0.15,
+                                0.15,
+                                0.15,
+                                0.15,
+                            ),
+                            self.entities[i].clone(),
+                        ));
+                    }
                     Some(Command::BotAddSubs(_)) => {}
                     Some(Command::BotDelete(i)) => {
                         self.entities[i] = EntityStates::Empty
