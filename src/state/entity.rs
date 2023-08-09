@@ -92,9 +92,17 @@ pub struct Full {
     pub gas: usize,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum Mix {
+    Bare,
+    Half(Half),
+    Full(Full),
+}
+
 pub type BareEntity = Entity<()>;
 pub type HalfEntity = Entity<Half>;
 pub type FullEntity = Entity<Full>;
+pub type MixEntity = Entity<Mix>;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TemplateEntity {
@@ -102,6 +110,48 @@ pub struct TemplateEntity {
     pub inventory_size: usize,
     pub materials: Materials,
     pub abilities: Option<Abilities<Full>>,
+}
+
+impl TryFrom<Entity<Mix>> for Entity<Full> {
+    type Error = &'static str;
+
+    fn try_from(mix: MixEntity) -> Result<Self, Self::Error> {
+        if let None = mix.abilities {
+            return Ok(FullEntity {
+                tokens: mix.tokens,
+                team: mix.team,
+                pos: mix.pos,
+                hp: mix.hp,
+                inventory_size: mix.inventory_size,
+                materials: mix.materials,
+                abilities: None,
+            });
+        }
+        if let Some(a) = mix.abilities {
+            if let Abilities {
+                brain: Mix::Full(f),
+                ..
+            } = a
+            {
+                return Ok(FullEntity {
+                    tokens: mix.tokens,
+                    team: mix.team,
+                    pos: mix.pos,
+                    hp: mix.hp,
+                    inventory_size: mix.inventory_size,
+                    materials: mix.materials,
+                    abilities: Some(Abilities {
+                        movement_type: a.movement_type,
+                        gun_damage: a.gun_damage,
+                        drill_damage: a.drill_damage,
+                        message: a.message,
+                        brain: f,
+                    }),
+                });
+            }
+        }
+        Err("Mix entity is not full to convert.")
+    }
 }
 
 impl TemplateEntity {

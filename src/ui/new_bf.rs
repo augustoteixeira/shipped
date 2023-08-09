@@ -15,7 +15,7 @@ use super::ui::{
 };
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{
-    Abilities, BareEntity, FullEntity, HalfEntity, MovementType, Team,
+    Abilities, Full, Mix, MixEntity, MovementType, Team,
 };
 use crate::state::geometry::{board_iterator, Pos};
 use crate::state::materials::Materials;
@@ -30,8 +30,8 @@ const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
 fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
     [
         EntityStates::Empty,
-        EntityStates::Bare(
-            BareEntity {
+        EntityStates::Entity(
+            MixEntity {
                 tokens: 0,
                 team: Team::Blue,
                 pos: Pos::new(0, 0),
@@ -47,8 +47,8 @@ fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
             },
             1,
         ),
-        EntityStates::Half(
-            HalfEntity {
+        EntityStates::Entity(
+            MixEntity {
                 tokens: 0,
                 team: Team::Blue,
                 pos: Pos::new(0, 0),
@@ -65,13 +65,13 @@ fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
                     gun_damage: 0,
                     drill_damage: 0,
                     message: None,
-                    brain: [0, 0],
+                    brain: Mix::Half([0, 0]),
                 }),
             },
             2,
         ),
-        EntityStates::Full(
-            FullEntity {
+        EntityStates::Entity(
+            MixEntity {
                 tokens: 0,
                 team: Team::Blue,
                 pos: Pos::new(0, 0),
@@ -83,7 +83,17 @@ fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
                     plutonium: 0,
                     copper: 0,
                 },
-                abilities: None,
+                abilities: Some(Abilities {
+                    movement_type: MovementType::Still,
+                    gun_damage: 0,
+                    drill_damage: 0,
+                    message: None,
+                    brain: Mix::Full(Full {
+                        half: [0, 0],
+                        code_index: 0,
+                        gas: 0,
+                    }),
+                }),
             },
             3,
         ),
@@ -136,9 +146,7 @@ pub enum Command {
 #[derive(Debug, Clone)]
 pub enum EntityStates {
     Empty,
-    Bare(BareEntity, usize),
-    Half(HalfEntity, usize),
-    Full(FullEntity, usize),
+    Entity(MixEntity, usize),
 }
 
 #[derive(Debug)]
@@ -269,66 +277,50 @@ impl NewBF {
     ) -> ButtonPanel<Command> {
         let rects: Vec<Rect> =
             split(rect, vec![0.0, 1.0], vec![0.0, 0.5, 0.75, 1.0]);
-        // this function is a mess with respect to types
         let mut panel = ButtonPanel::new(
             rect.clone(),
             (vec![], vec![], vec![], vec![], vec![]),
         );
-        // return with Edit button if entity is empty
-        if let EntityStates::Empty = &self.entities[index] {
-            panel.push(Button::<Command>::new(
-                rect.clone(),
-                ("Edit".to_string(), Command::BotEdit(index), true, false),
-            ));
-            return panel;
-        };
-        // otherwise: fill in number of entities and +- buttons
-        let number: usize;
-        if let EntityStates::Bare(_, n)
-        | EntityStates::Half(_, n)
-        | EntityStates::Full(_, n) = &self.entities[index]
-        {
-            number = *n;
-        } else {
-            unreachable!()
-        }
-        panel.append(&mut build_incrementer::<Command>(
-            &rects[0],
-            format!("Bot {}", index).to_string(),
-            number,
-            Command::BotNumber(index, Sign::Plus),
-            Command::BotNumber(index, Sign::Minus),
-        ));
-        // edit button otherwise
-        if let EntityStates::Bare(_, _)
-        | EntityStates::Half(_, _)
-        | EntityStates::Full(_, _) = &self.entities[index]
-        {
-            panel.push(Button::<Command>::new(
-                trim_margins(rects[1].clone(), 0.2, 0.2, 0.1, 0.1),
-                ("Edit".to_string(), Command::BotEdit(index), true, false),
-            ));
-        }
-        // if full, add brush
         match &self.entities[index] {
-            EntityStates::Full(_, _) => panel.push(Button::<Command>::new(
-                trim_margins(rects[2].clone(), 0.2, 0.2, 0.1, 0.1),
-                (
-                    "Use".to_string(),
-                    Command::BotBrush(index),
-                    true,
-                    (matches!(&self.brush, Brush::Bot(i) if index == *i)),
-                ),
-            )),
-            _ => {}
+            // return with New button if entity is empty
+            EntityStates::Empty => {
+                panel.push(Button::<Command>::new(
+                    rect.clone(),
+                    ("New".to_string(), Command::BotEdit(index), true, false),
+                ));
+                return panel;
+            }
+            EntityStates::Entity(e, number) => {
+                panel.append(&mut build_incrementer::<Command>(
+                    &rects[0],
+                    format!("Bot {}", index).to_string(),
+                    *number,
+                    Command::BotNumber(index, Sign::Plus),
+                    Command::BotNumber(index, Sign::Minus),
+                ));
+                // edit button
+                panel.push(Button::<Command>::new(
+                    trim_margins(rects[1].clone(), 0.2, 0.2, 0.1, 0.1),
+                    ("Edit".to_string(), Command::BotEdit(index), true, false),
+                ));
+                // if full, add brush
+                if let Some(Abilities {
+                    brain: Mix::Full(_),
+                    ..
+                }) = e.abilities
+                {
+                    panel.push(Button::<Command>::new(
+                    trim_margins(rects[2].clone(), 0.2, 0.2, 0.1, 0.1),
+                    (
+                        "Use".to_string(),
+                        Command::BotBrush(index),
+                        true,
+                        (matches!(&self.brush, Brush::Bot(i) if index == *i)),
+                    ),
+                ));
+                }
+            }
         }
-        panel.append(&mut build_incrementer::<Command>(
-            &rects[0],
-            format!("Bot {}", index).to_string(),
-            number,
-            Command::BotNumber(index, Sign::Plus),
-            Command::BotNumber(index, Sign::Minus),
-        ));
         panel
     }
 
@@ -423,9 +415,9 @@ impl Ui for NewBF {
         for pos in board_iterator() {
             if pos.y >= HEIGHT / 2 {
                 if let Some(id) = &self.tiles[pos.to_index()].entity_id {
-                    if let EntityStates::Full(e, _) = &self.entities[*id] {
+                    if let EntityStates::Entity(e, _) = &self.entities[*id] {
                         draw_entity(
-                            Some(e),
+                            Some(&e.clone().try_into().unwrap()),
                             XDISPL,
                             YDISPL,
                             pos,
@@ -435,7 +427,7 @@ impl Ui for NewBF {
                         let mut f = e.clone();
                         f.team = Team::Red;
                         draw_entity(
-                            Some(&f),
+                            Some(&f.try_into().unwrap()),
                             XDISPL,
                             YDISPL,
                             Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
@@ -582,9 +574,7 @@ impl Ui for NewBF {
                     Some(Command::BotNumber(i, sign)) => {
                         match &mut self.entities[i] {
                             EntityStates::Empty => {}
-                            EntityStates::Bare(_, j)
-                            | EntityStates::Half(_, j)
-                            | EntityStates::Full(_, j) => match sign {
+                            EntityStates::Entity(_, j) => match sign {
                                 Sign::Minus => *j = j.saturating_sub(1),
                                 Sign::Plus => *j += 1,
                             },

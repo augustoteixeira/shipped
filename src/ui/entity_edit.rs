@@ -61,102 +61,89 @@ impl EntityEdit {
             trim_margins(rects[3].clone(), 0.1, 0.1, 0.1, 0.1),
             ("Exit".to_string(), Command::Exit, true, false),
         ));
-        let tokens;
-        let hp;
-        let inv_size;
-        let carbon;
-        let silicon;
-        let plutonium;
-        let copper;
         match &self.entity {
             EntityStates::Empty => unreachable!(),
-            EntityStates::Bare(bare, _) => {
-                tokens = bare.tokens;
-                hp = bare.hp;
-                inv_size = bare.inventory_size;
-                carbon = bare.materials.carbon;
-                silicon = bare.materials.silicon;
-                plutonium = bare.materials.plutonium;
-                copper = bare.materials.copper;
+            EntityStates::Entity(e, _) => {
+                let first_row_rects: Vec<Rect> = split(
+                    &rects[0],
+                    vec![0.0, 0.25, 0.5, 0.75, 1.0],
+                    vec![0.0, 1.0],
+                );
+                panel.append(&mut build_incrementer::<Command>(
+                    &first_row_rects[0],
+                    "Tokens".to_string(),
+                    e.tokens,
+                    Command::PM(Attribute::Token, Sign::Plus),
+                    Command::PM(Attribute::Token, Sign::Minus),
+                ));
+                panel.append(&mut build_incrementer::<Command>(
+                    &first_row_rects[1],
+                    "HP".to_string(),
+                    e.hp,
+                    Command::PM(Attribute::HP, Sign::Plus),
+                    Command::PM(Attribute::HP, Sign::Minus),
+                ));
+                panel.append(&mut build_incrementer::<Command>(
+                    &first_row_rects[2],
+                    "Inv. Size".to_string(),
+                    e.inventory_size,
+                    Command::PM(Attribute::InvSize, Sign::Plus),
+                    Command::PM(Attribute::InvSize, Sign::Minus),
+                ));
+                let second_row_rects: Vec<Rect> = split(
+                    &rects[1],
+                    vec![0.0, 0.25, 0.5, 0.75, 1.0],
+                    vec![0.0, 1.0],
+                );
+                panel.append(&mut build_incrementer::<Command>(
+                    &second_row_rects[0],
+                    "Carbon".to_string(),
+                    e.materials.carbon,
+                    Command::PM(Attribute::Carbon, Sign::Plus),
+                    Command::PM(Attribute::Carbon, Sign::Minus),
+                ));
+                panel.append(&mut build_incrementer::<Command>(
+                    &second_row_rects[1],
+                    "Silicon".to_string(),
+                    e.materials.silicon,
+                    Command::PM(Attribute::Silicon, Sign::Plus),
+                    Command::PM(Attribute::Silicon, Sign::Minus),
+                ));
+                panel.append(&mut build_incrementer::<Command>(
+                    &second_row_rects[2],
+                    "Plutonium".to_string(),
+                    e.materials.plutonium,
+                    Command::PM(Attribute::Plutonium, Sign::Plus),
+                    Command::PM(Attribute::Plutonium, Sign::Minus),
+                ));
+                panel.append(&mut build_incrementer::<Command>(
+                    &second_row_rects[3],
+                    "Copper".to_string(),
+                    e.materials.copper,
+                    Command::PM(Attribute::Copper, Sign::Plus),
+                    Command::PM(Attribute::Copper, Sign::Minus),
+                ));
+                match &e.abilities {
+                    None => {
+                        panel.push(Button::<Command>::new(
+                            trim_margins(rects[2].clone(), 0.1, 0.1, 0.1, 0.1),
+                            (
+                                "Add Abilities".to_string(),
+                                Command::Exit,
+                                true,
+                                false,
+                            ),
+                        ));
+                    }
+                    Some(a) => {
+                        let third_row_rects: Vec<Rect> = split(
+                            &rects[2],
+                            vec![0.0, 0.25, 0.5, 0.75, 1.0],
+                            vec![0.0, 1.0],
+                        );
+                    }
+                }
             }
-            EntityStates::Half(bare, _) => {
-                tokens = bare.tokens;
-                hp = bare.hp;
-                inv_size = bare.inventory_size;
-                carbon = bare.materials.carbon;
-                silicon = bare.materials.silicon;
-                plutonium = bare.materials.plutonium;
-                copper = bare.materials.copper;
-            }
-            EntityStates::Full(bare, _) => {
-                tokens = bare.tokens;
-                hp = bare.hp;
-                inv_size = bare.inventory_size;
-                carbon = bare.materials.carbon;
-                silicon = bare.materials.silicon;
-                plutonium = bare.materials.plutonium;
-                copper = bare.materials.copper;
-            }
-        }
-        let first_row_rects: Vec<Rect> =
-            split(&rects[0], vec![0.0, 0.25, 0.5, 0.75, 1.0], vec![0.0, 1.0]);
-        panel.append(&mut build_incrementer::<Command>(
-            &first_row_rects[0],
-            "Tokens".to_string(),
-            tokens,
-            Command::PM(Attribute::Token, Sign::Plus),
-            Command::PM(Attribute::Token, Sign::Minus),
-        ));
-        panel.append(&mut build_incrementer::<Command>(
-            &first_row_rects[1],
-            "HP".to_string(),
-            hp,
-            Command::PM(Attribute::HP, Sign::Plus),
-            Command::PM(Attribute::HP, Sign::Minus),
-        ));
-        panel.append(&mut build_incrementer::<Command>(
-            &first_row_rects[2],
-            "Inv. Size".to_string(),
-            inv_size,
-            Command::PM(Attribute::InvSize, Sign::Plus),
-            Command::PM(Attribute::InvSize, Sign::Minus),
-        ));
-        let second_row_rects: Vec<Rect> =
-            split(&rects[1], vec![0.0, 0.25, 0.5, 0.75, 1.0], vec![0.0, 1.0]);
-        panel.append(&mut build_incrementer::<Command>(
-            &second_row_rects[0],
-            "Carbon".to_string(),
-            carbon,
-            Command::PM(Attribute::Carbon, Sign::Plus),
-            Command::PM(Attribute::Carbon, Sign::Minus),
-        ));
-        panel.append(&mut build_incrementer::<Command>(
-            &second_row_rects[1],
-            "Silicon".to_string(),
-            silicon,
-            Command::PM(Attribute::Silicon, Sign::Plus),
-            Command::PM(Attribute::Silicon, Sign::Minus),
-        ));
-        panel.append(&mut build_incrementer::<Command>(
-            &second_row_rects[2],
-            "Plutonium".to_string(),
-            plutonium,
-            Command::PM(Attribute::Plutonium, Sign::Plus),
-            Command::PM(Attribute::Plutonium, Sign::Minus),
-        ));
-        panel.append(&mut build_incrementer::<Command>(
-            &second_row_rects[3],
-            "Copper".to_string(),
-            copper,
-            Command::PM(Attribute::Copper, Sign::Plus),
-            Command::PM(Attribute::Copper, Sign::Minus),
-        ));
-
-        match &self.entity {
-            EntityStates::Empty => unreachable!(),
-            EntityStates::Bare(bare, _) => {}
-            EntityStates::Half(half, _) => {}
-            EntityStates::Full(full, _) => {}
         }
         self.panel = panel;
     }
@@ -213,7 +200,6 @@ impl Ui for EntityEdit {
                     Attribute::CodeID => {}
                     Attribute::Gas => {}
                 };
-                *j += 1;
             }
             None => {}
         }
