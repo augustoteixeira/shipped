@@ -4,14 +4,15 @@ extern crate rand_chacha;
 use async_trait::async_trait;
 use macroquad::prelude::*;
 
-use super::new_bf::{EntityStates, Sign};
+use super::new_bf::EntityStates;
 use super::ui::{
-    build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect,
-    Ui,
+    build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel,
+    Input, Rect, Sign, Ui,
 };
 use crate::state::constants::NUM_TEMPLATES;
 use crate::state::entity::{
-    Abilities, BareEntity, FullEntity, HalfEntity, MovementType, Team,
+    self, Abilities, BareEntity, FullEntity, HalfEntity, Mix, MovementType,
+    Team,
 };
 use crate::state::geometry::Pos;
 use crate::state::materials::Materials;
@@ -34,12 +35,16 @@ pub enum Attribute {
     Sub2,
     CodeID,
     Gas,
+    GunDamage,
+    DrillDamage,
+    Speed,
 }
 
 #[derive(Clone, Debug)]
 pub enum Command {
     Exit,
     PM(Attribute, Sign),
+    AddAttribute,
 }
 
 #[derive(Debug)]
@@ -123,13 +128,14 @@ impl EntityEdit {
                     Command::PM(Attribute::Copper, Sign::Plus),
                     Command::PM(Attribute::Copper, Sign::Minus),
                 ));
+
                 match &e.abilities {
                     None => {
                         panel.push(Button::<Command>::new(
                             trim_margins(rects[2].clone(), 0.1, 0.1, 0.1, 0.1),
                             (
                                 "Add Abilities".to_string(),
-                                Command::Exit,
+                                Command::AddAttribute,
                                 true,
                                 false,
                             ),
@@ -141,6 +147,27 @@ impl EntityEdit {
                             vec![0.0, 0.25, 0.5, 0.75, 1.0],
                             vec![0.0, 1.0],
                         );
+                        panel.append(&mut build_incrementer::<Command>(
+                            &third_row_rects[0],
+                            "Speed".to_string(),
+                            e.tokens,
+                            Command::PM(Attribute::GunDamage, Sign::Plus),
+                            Command::PM(Attribute::GunDamage, Sign::Minus),
+                        ));
+                        panel.append(&mut build_incrementer::<Command>(
+                            &third_row_rects[1],
+                            "Gun damage".to_string(),
+                            e.tokens,
+                            Command::PM(Attribute::GunDamage, Sign::Plus),
+                            Command::PM(Attribute::GunDamage, Sign::Minus),
+                        ));
+                        panel.append(&mut build_incrementer::<Command>(
+                            &third_row_rects[2],
+                            "Drill damage".to_string(),
+                            e.tokens,
+                            Command::PM(Attribute::DrillDamage, Sign::Plus),
+                            Command::PM(Attribute::DrillDamage, Sign::Minus),
+                        ));
                     }
                 }
             }
@@ -187,22 +214,56 @@ impl Ui for EntityEdit {
         match command {
             Some(Command::Exit) => return Some(EntityEditCommand::Exit),
             Some(Command::PM(attribute, sign)) => {
-                match attribute {
-                    Attribute::Token => {}
-                    Attribute::HP => {}
-                    Attribute::InvSize => {}
-                    Attribute::Carbon => {}
-                    Attribute::Silicon => {}
-                    Attribute::Plutonium => {}
-                    Attribute::Copper => {}
-                    Attribute::Sub1 => {}
-                    Attribute::Sub2 => {}
-                    Attribute::CodeID => {}
-                    Attribute::Gas => {}
-                };
+                if let EntityStates::Entity(mix, _) = &mut self.entity {
+                    match attribute {
+                        Attribute::Token => {
+                            mix.tokens = plus_minus(mix.tokens, sign);
+                        }
+                        Attribute::HP => {
+                            mix.hp = plus_minus(mix.hp, sign);
+                        }
+                        Attribute::InvSize => {
+                            mix.inventory_size =
+                                plus_minus(mix.inventory_size, sign);
+                        }
+                        Attribute::Carbon => {
+                            mix.materials.carbon =
+                                plus_minus(mix.materials.carbon, sign);
+                        }
+                        Attribute::Silicon => {
+                            mix.materials.silicon =
+                                plus_minus(mix.materials.silicon, sign);
+                        }
+                        Attribute::Plutonium => {
+                            mix.materials.plutonium =
+                                plus_minus(mix.materials.plutonium, sign);
+                        }
+                        Attribute::Copper => {
+                            mix.materials.copper =
+                                plus_minus(mix.materials.copper, sign);
+                        }
+                        Attribute::Sub1 => {}
+                        Attribute::Sub2 => {}
+                        Attribute::CodeID => {}
+                        Attribute::Gas => {}
+                        _ => {}
+                    };
+                }
             }
             None => {}
+            Some(Command::AddAttribute) => {
+                if let EntityStates::Entity(mix, _) = &mut self.entity {
+                    mix.abilities = Some(Abilities {
+                        movement_type: MovementType::Still,
+                        gun_damage: 0,
+                        drill_damage: 0,
+                        message: None,
+                        brain: Mix::Bare,
+                    })
+                }
+            }
         }
+        self.update_main_panel();
         return None;
     }
 }

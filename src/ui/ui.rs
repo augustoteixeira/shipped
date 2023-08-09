@@ -134,6 +134,19 @@ impl Ui for Text {
     }
 }
 
+#[derive(Clone, Debug)]
+pub enum Sign {
+    Plus,
+    Minus,
+}
+
+pub fn plus_minus(value: usize, sign: Sign) -> usize {
+    match sign {
+        Sign::Plus => value + 1,
+        Sign::Minus => value.saturating_sub(1),
+    }
+}
+
 #[derive(Debug)]
 pub struct Button<T: Clone + core::fmt::Debug> {
     pub rect: Rect,
