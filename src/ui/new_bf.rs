@@ -80,19 +80,19 @@ pub enum EntityStates {
   Entity(MixEntity, usize),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum Screen {
   Map,
   Entity(EntityEdit, usize),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum NewBFType {
-  BrandNew,
-  Derived(Box<NewBF>),
+  BrandNew(Option<Box<NewBF>>),
+  Derived(Option<Box<NewBF>>, Option<Box<NewBF>>),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct NewBF {
   screen: Screen,
   rect: Rect,
@@ -250,7 +250,36 @@ impl NewBF {
     panel
   }
 
+  fn revert_from(&mut self, nf: &NewBF) {
+    self.screen = nf.screen.clone();
+    self.rect = nf.rect.clone();
+    self.materials = nf.materials.clone();
+    self.tokens = nf.tokens.clone();
+    self.min_tokens = nf.min_tokens.clone();
+    self.brush = nf.brush.clone();
+    self.tiles = nf.tiles.clone();
+    self.entities = nf.entities.clone();
+    self.floor = nf.floor.clone();
+    self.tileset = nf.tileset.clone();
+  }
+
+  fn validate_state(&mut self) {
+    match self.new_type.clone() {
+      NewBFType::BrandNew(nf_old) => {
+        if !self.is_valid() {
+          self.revert_from(nf_old.as_ref().unwrap());
+        }
+      }
+      NewBFType::Derived(nf_reference, nf_old) => {}
+    }
+  }
+
+  fn is_valid(&self) -> bool {
+    true
+  }
+
   fn update_main_panel(&mut self) {
+    self.validate_state();
     let left_rect = trim_margins(
       split(&self.rect, vec![0.0, 0.45, 1.0], vec![0.0, 1.0])[0].clone(),
       0.05,
@@ -320,8 +349,9 @@ impl Ui for NewBF {
       floor,
       tileset,
       panel: ButtonPanel::new(rect, (vec![], vec![], vec![], vec![], vec![])),
-      new_type: NewBFType::BrandNew,
+      new_type: NewBFType::BrandNew(None),
     };
+    new_bf.new_type = NewBFType::BrandNew(Some(Box::new(new_bf.clone())));
     new_bf.update_main_panel();
     new_bf
   }

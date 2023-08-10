@@ -44,15 +44,37 @@ pub enum Command {
   AddCode,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EntityEdit {
   rect: Rect,
   pub entity: EntityStates,
   panel: ButtonPanel<Command>,
+  old_entity: EntityStates,
 }
 
 impl EntityEdit {
+  fn validate_state(&mut self) {
+    if !self.is_valid() {
+      self.entity = self.old_entity.clone();
+    }
+  }
+  fn is_valid(&self) -> bool {
+    match &self.entity {
+      EntityStates::Empty => {}
+      EntityStates::Entity(e, _) => {
+        let load =
+          e.materials.carbon + e.materials.silicon + e.materials.plutonium + e.materials.copper;
+        if load > e.inventory_size {
+          return false;
+        }
+      }
+    }
+    true
+  }
+
   fn update_main_panel(&mut self) {
+    self.validate_state();
+    self.old_entity = self.entity.clone();
     let rects: Vec<Rect> = split(
       &self.rect,
       vec![0.0, 1.0],
@@ -240,8 +262,9 @@ impl Ui for EntityEdit {
     let panel = ButtonPanel::new(rect.clone(), (vec![], vec![], vec![], vec![], vec![]));
     let mut ee = EntityEdit {
       rect,
-      entity: e,
+      entity: e.clone(),
       panel,
+      old_entity: e,
     };
     ee.update_main_panel();
     ee
