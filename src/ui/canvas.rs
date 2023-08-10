@@ -135,23 +135,18 @@ pub async fn draw_entity(
 
 fn get_texture_x(e: &FullEntity) -> f32 {
   let inventory = e.inventory_size;
-  let mut can_walk = false;
-  let mut can_drill = false;
-  let mut can_shoot = false;
   let a = &e.abilities;
-  can_walk = a.movement_type == MovementType::Walk;
-  can_drill = a.drill_damage > 0;
-  can_shoot = a.gun_damage > 0;
+  let can_walk = a.movement_type == MovementType::Walk;
+  let can_drill = a.drill_damage > 0;
+  let can_shoot = a.gun_damage > 0;
   match (inventory, can_walk, can_drill, can_shoot) {
     (0, false, false, false) => 7.0 * 16.0, // wall
     (_, false, false, false) => 2.0 * 16.0, // crate
-    (_, false, false, false) => 1.0 * 16.0, // arm tower
     (_, false, true, false) => 4.0 * 16.0,  // drill tower
     (_, false, _, true) => 6.0 * 16.0,      // gun tower
     (_, true, false, false) => 0.0,         // arm tank
     (_, true, true, false) => 3.0 * 16.0,   // drill tank
     (_, true, _, true) => 5.0 * 16.0,       // gun tank
-    _ => unreachable! {},
   }
 }
 

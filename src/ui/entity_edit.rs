@@ -9,12 +9,8 @@ use super::new_bf::EntityStates;
 use super::ui::{
   build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
 };
-use crate::state::constants::{NUM_SUB_ENTITIES, NUM_TEMPLATES};
-use crate::state::entity::{
-  self, Abilities, BareEntity, Full, FullEntity, HalfEntity, Mix, MixEntity, MovementType, Team,
-};
-use crate::state::geometry::Pos;
-use crate::state::materials::Materials;
+use crate::state::constants::NUM_TEMPLATES;
+use crate::state::entity::{Abilities, Full, Mix, MixEntity, MovementType};
 
 #[derive(Clone, Debug)]
 pub enum EntityEditCommand {
