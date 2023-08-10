@@ -11,7 +11,7 @@ use super::canvas::{draw_entity, draw_floor, draw_mat_map};
 use super::entity_edit::{EntityEdit, EntityEditCommand};
 use super::ui::{build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect, Ui};
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
-use crate::state::entity::{Abilities, Mix, MixEntity, MovementType, Team};
+use crate::state::entity::{Mix, MixEntity, MovementType, Team};
 use crate::state::geometry::{board_iterator, Pos};
 use crate::state::materials::Materials;
 use crate::state::state::Tile;
@@ -234,11 +234,7 @@ impl NewBF {
           ("Delete".to_string(), Command::BotDelete(index), true, false),
         ));
         // if full, add brush
-        if let Abilities {
-          brain: Mix::Full(_),
-          ..
-        } = e.abilities
-        {
+        if let Mix::Full(_) = e.brain {
           panel.push(Button::<Command>::new(
             trim_margins(rects[3].clone(), 0.2, 0.2, 0.1, 0.1),
             (
@@ -498,13 +494,11 @@ impl Ui for NewBF {
                     plutonium: 0,
                     copper: 0,
                   },
-                  abilities: Abilities::<Mix> {
-                    movement_type: MovementType::Still,
-                    gun_damage: 0,
-                    drill_damage: 0,
-                    message: None,
-                    brain: Mix::Bare,
-                  },
+                  movement_type: MovementType::Still,
+                  gun_damage: 0,
+                  drill_damage: 0,
+                  message: None,
+                  brain: Mix::Bare,
                 },
                 0,
               )

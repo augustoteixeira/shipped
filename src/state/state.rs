@@ -326,8 +326,7 @@ impl State {
   }
   pub fn set_message(&mut self, pos: Pos, message: Option<Message>) -> Result<(), StateError> {
     let entity = self.get_mut_entity(pos)?;
-    let abilities = &mut entity.abilities;
-    abilities.message = message.clone();
+    entity.message = message.clone();
     Ok(())
   }
   pub fn add_displace(pos: Pos, disp: &Displace) -> Result<Pos, StateError> {

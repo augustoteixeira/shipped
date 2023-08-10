@@ -8,7 +8,7 @@ pub mod state;
 pub mod ui;
 
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
-use crate::state::entity::{Abilities, Full, Message, MovementType, Team, TemplateEntity};
+use crate::state::entity::{Full, Message, MovementType, Team, TemplateEntity};
 use crate::state::geometry::{Direction, Displace, Neighbor, Pos};
 use crate::state::materials::Materials;
 use crate::state::squad::{build_state, Placement, Settings, Squad};
@@ -25,22 +25,20 @@ fn random_entity(rng: &mut ChaCha8Rng) -> TemplateEntity {
       plutonium: rng.gen_range(0..(quarter_inventory_size + 1)),
       copper: rng.gen_range(0..(quarter_inventory_size + 1)),
     },
-    abilities: Abilities {
-      movement_type: match rng.gen_range(0..2) {
-        0 => MovementType::Still,
-        _ => MovementType::Walk,
-      },
-      drill_damage: rng.gen_range(0..2),
-      gun_damage: rng.gen_range(0..2) + 4 * rng.gen_range(0..2),
-      message: Some(Message {
-        emotion: 0,
-        pos: Pos::new(0, 0),
-      }),
-      brain: Full {
-        half: [0, 0],
-        code_index: 2,
-        gas: 2000,
-      },
+    movement_type: match rng.gen_range(0..2) {
+      0 => MovementType::Still,
+      _ => MovementType::Walk,
+    },
+    drill_damage: rng.gen_range(0..2),
+    gun_damage: rng.gen_range(0..2) + 4 * rng.gen_range(0..2),
+    message: Some(Message {
+      emotion: 0,
+      pos: Pos::new(0, 0),
+    }),
+    brain: Full {
+      half: [0, 0],
+      code_index: 2,
+      gas: 2000,
     },
   }
 }

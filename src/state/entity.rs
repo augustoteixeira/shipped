@@ -16,15 +16,6 @@ pub struct Message {
   pub pos: Pos,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Abilities<T> {
-  pub movement_type: MovementType,
-  pub gun_damage: usize,
-  pub drill_damage: usize,
-  pub message: Option<Message>,
-  pub brain: T,
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum Team {
   Blue,
@@ -41,21 +32,25 @@ pub struct Entity<T> {
   pub hp: usize,
   pub inventory_size: usize,
   pub materials: Materials,
-  pub abilities: Abilities<T>,
+  pub movement_type: MovementType,
+  pub gun_damage: usize,
+  pub drill_damage: usize,
+  pub message: Option<Message>,
+  pub brain: T,
 }
 
 impl<T> Entity<T> {
   pub fn can_shoot(&self) -> bool {
-    self.abilities.gun_damage > 0
+    self.gun_damage > 0
   }
   pub fn can_move(&self) -> bool {
-    self.abilities.movement_type == MovementType::Walk
+    self.movement_type == MovementType::Walk
   }
   pub fn get_drill_damage(&self) -> usize {
-    self.abilities.drill_damage
+    self.drill_damage
   }
   pub fn get_gun_damage(&self) -> usize {
-    self.abilities.gun_damage
+    self.gun_damage
   }
   pub fn has_copper(&self) -> bool {
     self.materials.copper > 0
@@ -90,19 +85,18 @@ pub struct TemplateEntity {
   pub hp: usize,
   pub inventory_size: usize,
   pub materials: Materials,
-  pub abilities: Abilities<Full>,
+  pub movement_type: MovementType,
+  pub gun_damage: usize,
+  pub drill_damage: usize,
+  pub message: Option<Message>,
+  pub brain: Full,
 }
 
 impl TryFrom<Entity<Mix>> for Entity<Full> {
   type Error = &'static str;
 
   fn try_from(mix: MixEntity) -> Result<Self, Self::Error> {
-    let a = mix.abilities;
-    if let Abilities {
-      brain: Mix::Full(f),
-      ..
-    } = a
-    {
+    if let Mix::Full(f) = mix.brain {
       return Ok(FullEntity {
         tokens: mix.tokens,
         team: mix.team,
@@ -110,13 +104,11 @@ impl TryFrom<Entity<Mix>> for Entity<Full> {
         hp: mix.hp,
         inventory_size: mix.inventory_size,
         materials: mix.materials,
-        abilities: Abilities {
-          movement_type: a.movement_type,
-          gun_damage: a.gun_damage,
-          drill_damage: a.drill_damage,
-          message: a.message,
-          brain: f,
-        },
+        movement_type: mix.movement_type,
+        gun_damage: mix.gun_damage,
+        drill_damage: mix.drill_damage,
+        message: mix.message,
+        brain: f,
       });
     }
     Err("Mix entity is not full to convert.")
@@ -132,7 +124,11 @@ impl TemplateEntity {
       hp: self.hp,
       inventory_size: self.inventory_size,
       materials: self.materials,
-      abilities: self.abilities,
+      movement_type: self.movement_type,
+      gun_damage: self.gun_damage,
+      drill_damage: self.drill_damage,
+      message: self.message,
+      brain: self.brain,
     }
   }
 }
@@ -149,14 +145,13 @@ pub fn cost(body: &FullEntity) -> Materials {
   let mut result = body.materials.clone();
   result.carbon += body.hp * body.hp;
   result.carbon += body.inventory_size * body.inventory_size;
-  let a = &body.abilities;
-  match a.movement_type {
+  match body.movement_type {
     MovementType::Still => {}
     MovementType::Walk => result.plutonium += w,
   }
-  result.plutonium += a.drill_damage;
-  result.plutonium += a.gun_damage * a.gun_damage;
-  result.plutonium += a.brain.gas / 10 + 1;
+  result.plutonium += body.drill_damage;
+  result.plutonium += body.gun_damage * body.gun_damage;
+  result.plutonium += body.brain.gas / 10 + 1;
   // TODO remove this:
   result.carbon = 1;
   result.plutonium = 1;
