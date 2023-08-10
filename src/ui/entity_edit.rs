@@ -130,118 +130,104 @@ impl EntityEdit {
           Command::PM(Attribute::Copper, Sign::Minus),
         ));
 
-        match &e.abilities {
-          None => {
+        let a = &e.abilities;
+        let third_row_rects: Vec<Rect> =
+          split(&rects[2], vec![0.0, 0.25, 0.5, 0.75, 1.0], vec![0.0, 1.0])
+            .into_iter()
+            .map(|r| trim_margins(r, 0.1, 0.1, 0.1, 0.1))
+            .collect();
+        panel.append(&mut build_incrementer::<Command>(
+          &third_row_rects[0],
+          "Speed".to_string(),
+          match a.movement_type {
+            MovementType::Still => 0,
+            MovementType::Walk => 1,
+          },
+          Command::PM(Attribute::Speed, Sign::Plus),
+          Command::PM(Attribute::Speed, Sign::Minus),
+        ));
+        panel.append(&mut build_incrementer::<Command>(
+          &third_row_rects[1],
+          "Gun damage".to_string(),
+          a.gun_damage,
+          Command::PM(Attribute::GunDamage, Sign::Plus),
+          Command::PM(Attribute::GunDamage, Sign::Minus),
+        ));
+        panel.append(&mut build_incrementer::<Command>(
+          &third_row_rects[2],
+          "Drill damage".to_string(),
+          a.drill_damage,
+          Command::PM(Attribute::DrillDamage, Sign::Plus),
+          Command::PM(Attribute::DrillDamage, Sign::Minus),
+        ));
+        let fourth_row_rects: Vec<Rect> =
+          split(&rects[3], vec![0.0, 0.25, 0.5, 0.75, 1.0], vec![0.0, 1.0])
+            .into_iter()
+            .map(|r| trim_margins(r, 0.1, 0.1, 0.1, 0.1))
+            .collect();
+        match a.brain {
+          Mix::Bare => panel.push(Button::<Command>::new(
+            trim_margins(rects[3].clone(), 0.1, 0.1, 0.1, 0.1),
+            (
+              "Add Constr.".to_string(),
+              Command::AddConstructs,
+              true,
+              false,
+            ),
+          )),
+          Mix::Half(h) => {
+            panel.append(&mut build_incrementer::<Command>(
+              &fourth_row_rects[0],
+              "Sub 1".to_string(),
+              h[0] as usize,
+              Command::PM(Attribute::Sub1, Sign::Plus),
+              Command::PM(Attribute::Sub1, Sign::Minus),
+            ));
+            panel.append(&mut build_incrementer::<Command>(
+              &fourth_row_rects[1],
+              "Sub 2".to_string(),
+              h[1] as usize,
+              Command::PM(Attribute::Sub2, Sign::Plus),
+              Command::PM(Attribute::Sub2, Sign::Minus),
+            ));
             panel.push(Button::<Command>::new(
-              trim_margins(rects[2].clone(), 0.1, 0.1, 0.1, 0.1),
-              (
-                "Add Abilities".to_string(),
-                Command::AddAttribute,
-                true,
-                false,
-              ),
+              trim_margins(fourth_row_rects[2].clone(), 0.1, 0.1, 0.1, 0.1),
+              ("Add Code".to_string(), Command::AddCode, true, false),
             ));
           }
-          Some(a) => {
-            let third_row_rects: Vec<Rect> =
-              split(&rects[2], vec![0.0, 0.25, 0.5, 0.75, 1.0], vec![0.0, 1.0])
-                .into_iter()
-                .map(|r| trim_margins(r, 0.1, 0.1, 0.1, 0.1))
-                .collect();
+          Mix::Full(Full {
+            half: h,
+            code_index: ci,
+            gas,
+          }) => {
             panel.append(&mut build_incrementer::<Command>(
-              &third_row_rects[0],
-              "Speed".to_string(),
-              match a.movement_type {
-                MovementType::Still => 0,
-                MovementType::Walk => 1,
-              },
-              Command::PM(Attribute::Speed, Sign::Plus),
-              Command::PM(Attribute::Speed, Sign::Minus),
+              &fourth_row_rects[0],
+              "Sub 1".to_string(),
+              h[0] as usize,
+              Command::PM(Attribute::Sub1, Sign::Plus),
+              Command::PM(Attribute::Sub1, Sign::Minus),
             ));
             panel.append(&mut build_incrementer::<Command>(
-              &third_row_rects[1],
-              "Gun damage".to_string(),
-              a.gun_damage,
-              Command::PM(Attribute::GunDamage, Sign::Plus),
-              Command::PM(Attribute::GunDamage, Sign::Minus),
+              &fourth_row_rects[1],
+              "Sub 2".to_string(),
+              h[1] as usize,
+              Command::PM(Attribute::Sub2, Sign::Plus),
+              Command::PM(Attribute::Sub2, Sign::Minus),
             ));
             panel.append(&mut build_incrementer::<Command>(
-              &third_row_rects[2],
-              "Drill damage".to_string(),
-              a.drill_damage,
-              Command::PM(Attribute::DrillDamage, Sign::Plus),
-              Command::PM(Attribute::DrillDamage, Sign::Minus),
+              &fourth_row_rects[2],
+              "Code".to_string(),
+              ci,
+              Command::PM(Attribute::CodeID, Sign::Plus),
+              Command::PM(Attribute::CodeID, Sign::Minus),
             ));
-            let fourth_row_rects: Vec<Rect> =
-              split(&rects[3], vec![0.0, 0.25, 0.5, 0.75, 1.0], vec![0.0, 1.0])
-                .into_iter()
-                .map(|r| trim_margins(r, 0.1, 0.1, 0.1, 0.1))
-                .collect();
-            match a.brain {
-              Mix::Bare => panel.push(Button::<Command>::new(
-                trim_margins(rects[3].clone(), 0.1, 0.1, 0.1, 0.1),
-                (
-                  "Add Constr.".to_string(),
-                  Command::AddConstructs,
-                  true,
-                  false,
-                ),
-              )),
-              Mix::Half(h) => {
-                panel.append(&mut build_incrementer::<Command>(
-                  &fourth_row_rects[0],
-                  "Sub 1".to_string(),
-                  h[0] as usize,
-                  Command::PM(Attribute::Sub1, Sign::Plus),
-                  Command::PM(Attribute::Sub1, Sign::Minus),
-                ));
-                panel.append(&mut build_incrementer::<Command>(
-                  &fourth_row_rects[1],
-                  "Sub 2".to_string(),
-                  h[1] as usize,
-                  Command::PM(Attribute::Sub2, Sign::Plus),
-                  Command::PM(Attribute::Sub2, Sign::Minus),
-                ));
-                panel.push(Button::<Command>::new(
-                  trim_margins(fourth_row_rects[2].clone(), 0.1, 0.1, 0.1, 0.1),
-                  ("Add Code".to_string(), Command::AddCode, true, false),
-                ));
-              }
-              Mix::Full(Full {
-                half: h,
-                code_index: ci,
-                gas,
-              }) => {
-                panel.append(&mut build_incrementer::<Command>(
-                  &fourth_row_rects[0],
-                  "Sub 1".to_string(),
-                  h[0] as usize,
-                  Command::PM(Attribute::Sub1, Sign::Plus),
-                  Command::PM(Attribute::Sub1, Sign::Minus),
-                ));
-                panel.append(&mut build_incrementer::<Command>(
-                  &fourth_row_rects[1],
-                  "Sub 2".to_string(),
-                  h[1] as usize,
-                  Command::PM(Attribute::Sub2, Sign::Plus),
-                  Command::PM(Attribute::Sub2, Sign::Minus),
-                ));
-                panel.append(&mut build_incrementer::<Command>(
-                  &fourth_row_rects[2],
-                  "Code".to_string(),
-                  ci,
-                  Command::PM(Attribute::CodeID, Sign::Plus),
-                  Command::PM(Attribute::CodeID, Sign::Minus),
-                ));
-                panel.append(&mut build_incrementer::<Command>(
-                  &fourth_row_rects[3],
-                  "Gas".to_string(),
-                  gas,
-                  Command::PM(Attribute::Gas, Sign::Plus),
-                  Command::PM(Attribute::Gas, Sign::Minus),
-                ));
-              }
-            }
+            panel.append(&mut build_incrementer::<Command>(
+              &fourth_row_rects[3],
+              "Gas".to_string(),
+              gas,
+              Command::PM(Attribute::Gas, Sign::Plus),
+              Command::PM(Attribute::Gas, Sign::Minus),
+            ));
           }
         }
       }
@@ -309,58 +295,55 @@ impl Ui for EntityEdit {
               mix.materials.copper = plus_minus(mix.materials.copper, sign);
             }
             Attribute::Sub1 => {
-              if let Some(Abilities {
+              if let Abilities {
                 brain: Mix::Half(h) | Mix::Full(Full { half: h, .. }),
                 ..
-              }) = &mut mix.abilities
+              } = &mut mix.abilities
               {
                 h[0] = min(plus_minus(h[0] as usize, sign), NUM_TEMPLATES - 1) as u8;
               }
             }
             Attribute::Sub2 => {
-              if let Some(Abilities {
+              if let Abilities {
                 brain: Mix::Half(h) | Mix::Full(Full { half: h, .. }),
                 ..
-              }) = &mut mix.abilities
+              } = &mut mix.abilities
               {
                 h[1] = min(plus_minus(h[1] as usize, sign), NUM_TEMPLATES - 1) as u8;
               }
             }
             Attribute::CodeID => {
-              if let Some(Abilities {
+              if let Abilities {
                 brain: Mix::Full(Full { code_index: c, .. }),
                 ..
-              }) = &mut mix.abilities
+              } = &mut mix.abilities
               {
                 *c = plus_minus(*c, sign);
               }
             }
             Attribute::Gas => {
-              if let Some(Abilities {
+              if let Abilities {
                 brain: Mix::Full(Full { gas: g, .. }),
                 ..
-              }) = &mut mix.abilities
+              } = &mut mix.abilities
               {
                 *g = plus_minus(*g, sign);
               }
             }
             Attribute::Speed => {
-              if let Some(a) = &mut mix.abilities {
-                match sign {
-                  Sign::Minus => a.movement_type = MovementType::Still,
-                  Sign::Plus => a.movement_type = MovementType::Walk,
-                }
+              let a = &mut mix.abilities;
+              match sign {
+                Sign::Minus => a.movement_type = MovementType::Still,
+                Sign::Plus => a.movement_type = MovementType::Walk,
               }
             }
             Attribute::GunDamage => {
-              if let Some(a) = &mut mix.abilities {
-                a.gun_damage = plus_minus(a.gun_damage, sign);
-              }
+              let a = &mut mix.abilities;
+              a.gun_damage = plus_minus(a.gun_damage, sign);
             }
             Attribute::DrillDamage => {
-              if let Some(a) = &mut mix.abilities {
-                a.drill_damage = plus_minus(a.drill_damage, sign);
-              }
+              let a = &mut mix.abilities;
+              a.drill_damage = plus_minus(a.drill_damage, sign);
             }
           };
         }
@@ -368,36 +351,33 @@ impl Ui for EntityEdit {
       None => {}
       Some(Command::AddAttribute) => {
         if let EntityStates::Entity(mix, _) = &mut self.entity {
-          mix.abilities = Some(Abilities {
+          mix.abilities = Abilities {
             movement_type: MovementType::Still,
             gun_damage: 0,
             drill_damage: 0,
             message: None,
             brain: Mix::Bare,
-          })
+          }
         }
       }
       Some(Command::AddConstructs) => {
         if let EntityStates::Entity(mix, _) = &mut self.entity {
-          if let Some(a) = &mut mix.abilities {
-            a.brain = Mix::Half([0, 0]);
-          }
+          mix.abilities.brain = Mix::Half([0, 0]);
         }
       }
       Some(Command::AddCode) => {
         if let EntityStates::Entity(mix, _) = &mut self.entity {
-          if let Some(a) = &mut mix.abilities {
-            if let Abilities {
-              brain: Mix::Half(h),
-              ..
-            } = a
-            {
-              a.brain = Mix::Full(Full {
-                half: h.clone(),
-                code_index: 0,
-                gas: 0,
-              });
-            }
+          let a = &mut mix.abilities;
+          if let Abilities {
+            brain: Mix::Half(h),
+            ..
+          } = a
+          {
+            a.brain = Mix::Full(Full {
+              half: h.clone(),
+              code_index: 0,
+              gas: 0,
+            });
           }
         }
       }

@@ -227,10 +227,10 @@ impl NewBF {
           ("Delete".to_string(), Command::BotDelete(index), true, false),
         ));
         // if full, add brush
-        if let Some(Abilities {
+        if let Abilities {
           brain: Mix::Full(_),
           ..
-        }) = e.abilities
+        } = e.abilities
         {
           panel.push(Button::<Command>::new(
             trim_margins(rects[3].clone(), 0.2, 0.2, 0.1, 0.1),
@@ -490,7 +490,13 @@ impl Ui for NewBF {
                     plutonium: 0,
                     copper: 0,
                   },
-                  abilities: None,
+                  abilities: Abilities::<Mix> {
+                    movement_type: MovementType::Still,
+                    gun_damage: 0,
+                    drill_damage: 0,
+                    message: None,
+                    brain: Mix::Bare,
+                  },
                 },
                 0,
               )
