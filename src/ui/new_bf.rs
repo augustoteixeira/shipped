@@ -87,6 +87,12 @@ enum Screen {
 }
 
 #[derive(Debug)]
+pub enum NewBFType {
+  BrandNew,
+  Derived(Box<NewBF>),
+}
+
+#[derive(Debug)]
 pub struct NewBF {
   screen: Screen,
   rect: Rect,
@@ -99,6 +105,7 @@ pub struct NewBF {
   floor: [usize; WIDTH * HEIGHT],
   tileset: Texture2D,
   panel: ButtonPanel<Command>,
+  new_type: NewBFType,
 }
 
 impl NewBF {
@@ -317,6 +324,7 @@ impl Ui for NewBF {
       floor,
       tileset,
       panel: ButtonPanel::new(rect, (vec![], vec![], vec![], vec![], vec![])),
+      new_type: NewBFType::BrandNew,
     };
     new_bf.update_main_panel();
     new_bf
