@@ -14,6 +14,7 @@ use crate::state::entity::{Full, Mix, MixEntity, MovementType};
 
 #[derive(Clone, Debug)]
 pub enum EntityEditCommand {
+  RequestChange(MixEntity),
   Exit(MixEntity),
 }
 
@@ -46,10 +47,10 @@ pub enum Command {
 
 #[derive(Clone, Debug)]
 pub struct EntityEdit {
-  rect: Rect,
   pub entity: EntityStates,
-  panel: ButtonPanel<Command>,
   old_entity: EntityStates,
+  rect: Rect,
+  panel: ButtonPanel<Command>,
 }
 
 impl EntityEdit {
@@ -373,6 +374,10 @@ impl Ui for EntityEdit {
       }
     }
     self.update_main_panel();
-    return None;
+    if let EntityStates::Entity(e, _) = &self.entity {
+      return Some(EntityEditCommand::RequestChange(e.clone()));
+    } else {
+      return None;
+    }
   }
 }

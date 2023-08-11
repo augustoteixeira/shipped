@@ -6,6 +6,9 @@ use futures::executor::block_on;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 
 use super::canvas::{draw_entity, draw_floor, draw_mat_map};
 use super::entity_edit::{EntityEdit, EntityEditCommand};
@@ -88,20 +91,25 @@ enum Screen {
 
 #[derive(Clone, Debug)]
 pub enum NewBFType {
-  BrandNew(Option<Box<NewBF>>),
-  Derived(Option<Box<NewBF>>, Option<Box<NewBF>>),
+  BrandNew(NewBFState),
+  Derived(NewBFState, NewBFState),
 }
 
 #[derive(Clone, Debug)]
-pub struct NewBF {
-  screen: Screen,
-  rect: Rect,
+pub struct NewBFState {
   materials: Materials,
   tokens: usize,
   min_tokens: usize,
   brush: Brush,
   tiles: Vec<Tile>,
   entities: [EntityStates; NUM_TEMPLATES],
+}
+
+#[derive(Debug)]
+pub struct NewBF {
+  state: NewBFState,
+  screen: Screen,
+  rect: Rect,
   floor: [usize; WIDTH * HEIGHT],
   tileset: Texture2D,
   panel: ButtonPanel<Command>,
@@ -118,28 +126,28 @@ impl NewBF {
     let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
       &rects[0],
       "Carbon".to_string(),
-      self.materials.carbon,
+      self.state.materials.carbon,
       Command::MatPM(MatName::Carbon, Sign::Plus),
       Command::MatPM(MatName::Carbon, Sign::Minus),
     );
     panel.append(&mut build_incrementer::<Command>(
       &rects[1],
       "Silicon".to_string(),
-      self.materials.silicon,
+      self.state.materials.silicon,
       Command::MatPM(MatName::Silicon, Sign::Plus),
       Command::MatPM(MatName::Silicon, Sign::Minus),
     ));
     panel.append(&mut build_incrementer::<Command>(
       &rects[2],
       "Pluton.".to_string(),
-      self.materials.plutonium,
+      self.state.materials.plutonium,
       Command::MatPM(MatName::Plutonium, Sign::Plus),
       Command::MatPM(MatName::Plutonium, Sign::Minus),
     ));
     panel.append(&mut build_incrementer::<Command>(
       &rects[3],
       "Copper".to_string(),
-      self.materials.copper,
+      self.state.materials.copper,
       Command::MatPM(MatName::Copper, Sign::Plus),
       Command::MatPM(MatName::Copper, Sign::Minus),
     ));
@@ -160,7 +168,7 @@ impl NewBF {
     ];
     let activities: Vec<bool> = [true; 4].into();
     let mut alerts: Vec<bool> = [false; 4].into();
-    match self.brush {
+    match self.state.brush {
       Brush::Carbon => alerts[0] = true,
       Brush::Silicon => alerts[1] = true,
       Brush::Plutonium => alerts[2] = true,
@@ -180,14 +188,14 @@ impl NewBF {
     let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
       &rects[0],
       "Tokens".to_string(),
-      self.tokens,
+      self.state.tokens,
       Command::Token(TknButton::Tokens, Sign::Plus),
       Command::Token(TknButton::Tokens, Sign::Minus),
     );
     panel.append(&mut build_incrementer(
       &rects[1],
       "Min Tks".to_string(),
-      self.min_tokens,
+      self.state.min_tokens,
       Command::Token(TknButton::MinTkns, Sign::Plus),
       Command::Token(TknButton::MinTkns, Sign::Minus),
     ));
@@ -206,7 +214,7 @@ impl NewBF {
   fn build_single_bot_panel(&self, rect: &Rect, index: usize) -> ButtonPanel<Command> {
     let rects: Vec<Rect> = split(rect, vec![0.0, 1.0], vec![0.0, 0.4, 0.6, 0.8, 1.0]);
     let mut panel = ButtonPanel::new(rect.clone(), (vec![], vec![], vec![], vec![], vec![]));
-    match &self.entities[index] {
+    match &self.state.entities[index] {
       // return with New button if entity is empty
       EntityStates::Empty => {
         panel.push(Button::<Command>::new(
@@ -241,7 +249,7 @@ impl NewBF {
               "Use".to_string(),
               Command::BotBrush(index),
               true,
-              (matches!(&self.brush, Brush::Bot(i) if index == *i)),
+              (matches!(&self.state.brush, Brush::Bot(i) if index == *i)),
             ),
           ));
         }
@@ -250,32 +258,34 @@ impl NewBF {
     panel
   }
 
-  fn revert_from(&mut self, nf: &NewBF) {
-    self.screen = nf.screen.clone();
-    self.rect = nf.rect.clone();
-    self.materials = nf.materials.clone();
-    self.tokens = nf.tokens.clone();
-    self.min_tokens = nf.min_tokens.clone();
-    self.brush = nf.brush.clone();
-    self.tiles = nf.tiles.clone();
-    self.entities = nf.entities.clone();
-    self.floor = nf.floor.clone();
-    self.tileset = nf.tileset.clone();
+  fn revert_from(&mut self, nf: &NewBFState) {
+    self.state = nf.clone();
   }
 
   fn validate_state(&mut self) {
     match self.new_type.clone() {
       NewBFType::BrandNew(nf_old) => {
         if !self.is_valid() {
-          self.revert_from(nf_old.as_ref().unwrap());
+          self.revert_from(&nf_old);
+        } else {
+          self.new_type = NewBFType::BrandNew(self.state.clone());
         }
       }
-      NewBFType::Derived(nf_reference, nf_old) => {}
+      NewBFType::Derived(nf_reference, nf_old) => {
+        if !self.is_valid() {
+          self.revert_from(&nf_old);
+        } else {
+          self.new_type = NewBFType::Derived(nf_reference, self.state.clone());
+        }
+      }
     }
   }
 
   fn is_valid(&self) -> bool {
-    true
+    match self.new_type.clone() {
+      NewBFType::BrandNew(_) => true,
+      NewBFType::Derived(_, _) => true,
+    }
   }
 
   fn update_main_panel(&mut self) {
@@ -308,6 +318,24 @@ impl NewBF {
     }
     self.panel = button_panel;
   }
+
+  fn save_nf(&self) {
+    let path = Path::new("./levels");
+    assert!(path.is_dir());
+    let mut i: usize = 0;
+    loop {
+      let dest_filename = format!("{:05}", i);
+      let mut dest = path.join(dest_filename);
+      dest.set_extension("lvl");
+      if dest.exists() {
+        i = i + 1;
+      } else {
+        let mut file = File::create(dest).unwrap();
+        file.write_all(b"Hello, world!").unwrap();
+        break;
+      }
+    }
+  }
 }
 
 #[async_trait]
@@ -322,9 +350,7 @@ impl Ui for NewBF {
     for i in 0..(WIDTH * HEIGHT) {
       floor[i] = rng.gen_range(0..7);
     }
-    let mut new_bf = NewBF {
-      screen: Screen::Map,
-      rect: rect.clone(),
+    let new_bf_state = NewBFState {
       materials: Materials {
         carbon: 0,
         silicon: 0,
@@ -346,12 +372,16 @@ impl Ui for NewBF {
         })
         .collect(),
       entities: construct_entities(),
+    };
+    let mut new_bf = NewBF {
+      screen: Screen::Map,
+      rect: rect.clone(),
+      state: new_bf_state.clone(),
       floor,
       tileset,
       panel: ButtonPanel::new(rect, (vec![], vec![], vec![], vec![], vec![])),
-      new_type: NewBFType::BrandNew(None),
+      new_type: NewBFType::BrandNew(new_bf_state),
     };
-    new_bf.new_type = NewBFType::BrandNew(Some(Box::new(new_bf.clone())));
     new_bf.update_main_panel();
     new_bf
   }
@@ -359,12 +389,12 @@ impl Ui for NewBF {
   async fn draw(&self) {
     self.panel.draw().await;
     draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
-    draw_mat_map(&self.tiles, XDISPL, YDISPL, &self.tileset).await;
+    draw_mat_map(&self.state.tiles, XDISPL, YDISPL, &self.tileset).await;
     draw_rectangle(XDISPL, YDISPL, 16.0 * 60.0, 16.0 * 30.0, SMOKE);
     for pos in board_iterator() {
       if pos.y >= HEIGHT / 2 {
-        if let Some(id) = &self.tiles[pos.to_index()].entity_id {
-          if let EntityStates::Entity(e, _) = &self.entities[*id] {
+        if let Some(id) = &self.state.tiles[pos.to_index()].entity_id {
+          if let EntityStates::Entity(e, _) = &self.state.entities[*id] {
             draw_entity(
               Some(&e.clone().try_into().unwrap()),
               XDISPL,
@@ -423,39 +453,39 @@ impl Ui for NewBF {
           Some(Command::MatPM(mat_name, sign)) => match mat_name {
             MatName::Carbon => match sign {
               Sign::Plus => {
-                self.materials.carbon += 1;
+                self.state.materials.carbon += 1;
               }
               Sign::Minus => {
-                self.materials.carbon = self.materials.carbon.saturating_sub(1);
+                self.state.materials.carbon = self.state.materials.carbon.saturating_sub(1);
               }
             },
             MatName::Silicon => match sign {
               Sign::Plus => {
-                self.materials.silicon += 1;
+                self.state.materials.silicon += 1;
               }
               Sign::Minus => {
-                self.materials.silicon = self.materials.silicon.saturating_sub(1);
+                self.state.materials.silicon = self.state.materials.silicon.saturating_sub(1);
               }
             },
             MatName::Plutonium => match sign {
               Sign::Plus => {
-                self.materials.plutonium += 1;
+                self.state.materials.plutonium += 1;
               }
               Sign::Minus => {
-                self.materials.plutonium = self.materials.plutonium.saturating_sub(1);
+                self.state.materials.plutonium = self.state.materials.plutonium.saturating_sub(1);
               }
             },
             MatName::Copper => match sign {
               Sign::Plus => {
-                self.materials.copper += 1;
+                self.state.materials.copper += 1;
               }
               Sign::Minus => {
-                self.materials.copper = self.materials.copper.saturating_sub(1);
+                self.state.materials.copper = self.state.materials.copper.saturating_sub(1);
               }
             },
           },
           Some(Command::MatBrush(mat)) => {
-            self.brush = match mat {
+            self.state.brush = match mat {
               MatName::Carbon => Brush::Carbon,
               MatName::Silicon => Brush::Silicon,
               MatName::Plutonium => Brush::Plutonium,
@@ -465,53 +495,55 @@ impl Ui for NewBF {
           Some(Command::Token(tk_button, sign)) => match tk_button {
             TknButton::Tokens => match sign {
               Sign::Plus => {
-                self.tokens += 1;
+                self.state.tokens += 1;
               }
               Sign::Minus => {
-                self.tokens = self.tokens.saturating_sub(1);
+                self.state.tokens = self.state.tokens.saturating_sub(1);
               }
             },
             TknButton::MinTkns => match sign {
               Sign::Plus => {
-                self.min_tokens += 1;
+                self.state.min_tokens += 1;
               }
               Sign::Minus => {
-                self.min_tokens = self.min_tokens.saturating_sub(1);
+                self.state.min_tokens = self.state.min_tokens.saturating_sub(1);
               }
             },
           },
-          Some(Command::MapLeftClk(pos)) => match self.brush {
+          Some(Command::MapLeftClk(pos)) => match self.state.brush {
             Brush::Carbon => {
-              self.tiles[pos.to_index()].materials.carbon += 1;
-              self.tiles[pos.invert().to_index()].materials.carbon += 1;
+              self.state.tiles[pos.to_index()].materials.carbon += 1;
+              self.state.tiles[pos.invert().to_index()].materials.carbon += 1;
             }
             Brush::Silicon => {
-              self.tiles[pos.to_index()].materials.silicon += 1;
-              self.tiles[pos.invert().to_index()].materials.silicon += 1;
+              self.state.tiles[pos.to_index()].materials.silicon += 1;
+              self.state.tiles[pos.invert().to_index()].materials.silicon += 1;
             }
             Brush::Plutonium => {
-              self.tiles[pos.to_index()].materials.plutonium += 1;
-              self.tiles[pos.invert().to_index()].materials.plutonium += 1;
+              self.state.tiles[pos.to_index()].materials.plutonium += 1;
+              self.state.tiles[pos.invert().to_index()]
+                .materials
+                .plutonium += 1;
             }
             Brush::Copper => {
-              self.tiles[pos.to_index()].materials.copper += 1;
-              self.tiles[pos.invert().to_index()].materials.copper += 1;
+              self.state.tiles[pos.to_index()].materials.copper += 1;
+              self.state.tiles[pos.invert().to_index()].materials.copper += 1;
             }
             Brush::Bot(i) => {
-              self.tiles[pos.to_index()].entity_id = Some(i);
+              self.state.tiles[pos.to_index()].entity_id = Some(i);
             }
           },
-          Some(Command::BotNumber(i, sign)) => match &mut self.entities[i] {
+          Some(Command::BotNumber(i, sign)) => match &mut self.state.entities[i] {
             EntityStates::Empty => {}
             EntityStates::Entity(_, j) => match sign {
               Sign::Minus => *j = j.saturating_sub(1),
               Sign::Plus => *j += 1,
             },
           },
-          Some(Command::BotBrush(i)) => self.brush = Brush::Bot(i),
-          Some(Command::BotEdit(i)) => match &self.entities[i] {
+          Some(Command::BotBrush(i)) => self.state.brush = Brush::Bot(i),
+          Some(Command::BotEdit(i)) => match &self.state.entities[i] {
             EntityStates::Empty => {
-              self.entities[i] = EntityStates::Entity(
+              self.state.entities[i] = EntityStates::Entity(
                 MixEntity {
                   tokens: 0,
                   team: Team::Blue,
@@ -537,18 +569,22 @@ impl Ui for NewBF {
               self.screen = Screen::Entity(
                 EntityEdit::new(
                   trim_margins(self.rect.clone(), 0.15, 0.15, 0.15, 0.15),
-                  self.entities[i].clone(),
+                  self.state.entities[i].clone(),
                 ),
                 i,
               );
             }
           },
           Some(Command::BotAddSubs(_)) => {}
-          Some(Command::BotDelete(i)) => self.entities[i] = EntityStates::Empty,
-          Some(Command::SaveAndExit) => return Some(()),
+          Some(Command::BotDelete(i)) => self.state.entities[i] = EntityStates::Empty,
+          Some(Command::SaveAndExit) => {
+            self.save_nf();
+            return Some(());
+          }
         };
         self.update_main_panel();
         if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) = input {
+          self.save_nf();
           Some(())
         } else {
           None
@@ -556,11 +592,26 @@ impl Ui for NewBF {
       }
       Screen::Entity(ee, index) => match &mut ee.process_input(input) {
         Some(EntityEditCommand::Exit(e)) => {
-          if let EntityStates::Entity(_, n) = self.entities[*index] {
-            self.entities[*index] = EntityStates::Entity(e.clone(), n);
+          if let EntityStates::Entity(_, n) = self.state.entities[*index] {
+            self.state.entities[*index] = EntityStates::Entity(e.clone(), n);
           }
           self.screen = Screen::Map;
           self.update_main_panel();
+          None
+        }
+        Some(EntityEditCommand::RequestChange(e)) => {
+          if let EntityStates::Entity(_, n) = self.state.entities[*index] {
+            self.state.entities[*index] = EntityStates::Entity(e.clone(), n);
+          }
+          let i = *index;
+          self.update_main_panel();
+          self.screen = Screen::Entity(
+            EntityEdit::new(
+              trim_margins(self.rect.clone(), 0.15, 0.15, 0.15, 0.15),
+              self.state.entities[i].clone(),
+            ),
+            i,
+          );
           None
         }
         _ => None,

@@ -18,3 +18,7 @@ Cargo.lock
 # Added by cargo
 
 /target
+
+# levels and squads
+*.lvl
+*.sqd
