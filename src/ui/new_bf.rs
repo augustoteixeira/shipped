@@ -6,6 +6,7 @@ use futures::executor::block_on;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -77,7 +78,7 @@ pub enum Command {
   BotDelete(usize),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EntityStates {
   Empty,
   Entity(MixEntity, usize),
@@ -95,12 +96,11 @@ pub enum NewBFType {
   Derived(NewBFState, NewBFState),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewBFState {
   materials: Materials,
   tokens: usize,
   min_tokens: usize,
-  brush: Brush,
   tiles: Vec<Tile>,
   entities: [EntityStates; NUM_TEMPLATES],
 }
@@ -108,6 +108,7 @@ pub struct NewBFState {
 #[derive(Debug)]
 pub struct NewBF {
   state: NewBFState,
+  brush: Brush,
   screen: Screen,
   rect: Rect,
   floor: [usize; WIDTH * HEIGHT],
@@ -168,7 +169,7 @@ impl NewBF {
     ];
     let activities: Vec<bool> = [true; 4].into();
     let mut alerts: Vec<bool> = [false; 4].into();
-    match self.state.brush {
+    match self.brush {
       Brush::Carbon => alerts[0] = true,
       Brush::Silicon => alerts[1] = true,
       Brush::Plutonium => alerts[2] = true,
@@ -249,7 +250,7 @@ impl NewBF {
               "Use".to_string(),
               Command::BotBrush(index),
               true,
-              (matches!(&self.state.brush, Brush::Bot(i) if index == *i)),
+              (matches!(&self.brush, Brush::Bot(i) if index == *i)),
             ),
           ));
         }
@@ -331,7 +332,8 @@ impl NewBF {
         i = i + 1;
       } else {
         let mut file = File::create(dest).unwrap();
-        file.write_all(b"Hello, world!").unwrap();
+        let serialized = serde_json::to_string(&self.state).unwrap();
+        file.write_all(serialized.as_bytes()).unwrap();
         break;
       }
     }
@@ -359,7 +361,6 @@ impl Ui for NewBF {
       },
       tokens: 0,
       min_tokens: 0,
-      brush: Brush::Carbon,
       tiles: (0..(WIDTH * HEIGHT))
         .map(|_| Tile {
           entity_id: None,
@@ -375,6 +376,7 @@ impl Ui for NewBF {
     };
     let mut new_bf = NewBF {
       screen: Screen::Map,
+      brush: Brush::Carbon,
       rect: rect.clone(),
       state: new_bf_state.clone(),
       floor,
@@ -485,7 +487,7 @@ impl Ui for NewBF {
             },
           },
           Some(Command::MatBrush(mat)) => {
-            self.state.brush = match mat {
+            self.brush = match mat {
               MatName::Carbon => Brush::Carbon,
               MatName::Silicon => Brush::Silicon,
               MatName::Plutonium => Brush::Plutonium,
@@ -510,7 +512,7 @@ impl Ui for NewBF {
               }
             },
           },
-          Some(Command::MapLeftClk(pos)) => match self.state.brush {
+          Some(Command::MapLeftClk(pos)) => match self.brush {
             Brush::Carbon => {
               self.state.tiles[pos.to_index()].materials.carbon += 1;
               self.state.tiles[pos.invert().to_index()].materials.carbon += 1;
@@ -540,7 +542,7 @@ impl Ui for NewBF {
               Sign::Plus => *j += 1,
             },
           },
-          Some(Command::BotBrush(i)) => self.state.brush = Brush::Bot(i),
+          Some(Command::BotBrush(i)) => self.brush = Brush::Bot(i),
           Some(Command::BotEdit(i)) => match &self.state.entities[i] {
             EntityStates::Empty => {
               self.state.entities[i] = EntityStates::Entity(

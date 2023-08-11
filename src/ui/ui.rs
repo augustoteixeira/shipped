@@ -134,7 +134,7 @@ impl Ui for Text {
   }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Copy)]
 pub enum Sign {
   Plus,
   Minus,
