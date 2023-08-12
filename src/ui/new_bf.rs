@@ -19,12 +19,12 @@ use crate::state::entity::{Mix, MixEntity, MovementType, Team};
 use crate::state::geometry::{board_iterator, Pos};
 use crate::state::materials::Materials;
 use crate::state::state::Tile;
+use crate::state::utils::get_next_file_number;
 
 const XDISPL: f32 = 800.0;
 const YDISPL: f32 = 30.0;
 
 const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
-//const DARKSMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.5);
 
 fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
   [
@@ -104,11 +104,11 @@ pub enum NewBFType {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewBFState {
-  materials: Materials,
-  tokens: usize,
-  min_tokens: usize,
-  tiles: Vec<Tile>,
-  entities: [EntityStates; NUM_TEMPLATES],
+  pub materials: Materials,
+  pub tokens: usize,
+  pub min_tokens: usize,
+  pub tiles: Vec<Tile>,
+  pub entities: [EntityStates; NUM_TEMPLATES],
 }
 
 #[derive(Debug)]
@@ -328,22 +328,14 @@ impl NewBF {
 
   fn save_nf(&self) -> usize {
     let path = Path::new("./levels");
-    assert!(path.is_dir());
-    let mut i: usize = 0;
-    loop {
-      let dest_filename = format!("{:05}", i);
-      let mut dest = path.join(dest_filename);
-      dest.set_extension("lvl");
-      if dest.exists() {
-        i = i + 1;
-      } else {
-        let mut file = File::create(dest).unwrap();
-        let serialized = serde_json::to_string(&self.state).unwrap();
-        file.write_all(serialized.as_bytes()).unwrap();
-        break;
-      }
-    }
-    i
+    let next_file_number = get_next_file_number(path, "lvl".to_string());
+    let dest_filename = format!("{:05}", next_file_number);
+    let mut dest = path.join(dest_filename);
+    dest.set_extension("lvl");
+    let mut file = File::create(dest).unwrap();
+    let serialized = serde_json::to_string(&self.state).unwrap();
+    file.write_all(serialized.as_bytes()).unwrap();
+    next_file_number
   }
 
   fn build_finish_dialogue(&self) -> ButtonPanel<Command> {
@@ -359,7 +351,12 @@ impl NewBF {
     ));
     panel.push(Button::<Command>::new(
       rects[1].clone(),
-      ("Return".to_string(), Command::BackToEdit, true, false),
+      (
+        "Continue editing".to_string(),
+        Command::BackToEdit,
+        true,
+        false,
+      ),
     ));
     panel.push(Button::<Command>::new(
       rects[2].clone(),
@@ -482,9 +479,11 @@ impl Ui for NewBF {
         ee.draw().await;
       }
       Screen::SaveDialogue(panel) => {
+        draw_rectangle(self.rect.x, self.rect.y, self.rect.w, self.rect.h, SMOKE);
         panel.draw().await;
       }
       Screen::DisplayFileNumber(panel) => {
+        draw_rectangle(self.rect.x, self.rect.y, self.rect.w, self.rect.h, SMOKE);
         panel.draw().await;
       }
     }
@@ -667,6 +666,8 @@ impl Ui for NewBF {
         let command = panel.process_input(input.clone());
         match command {
           Some(Command::Save) => {
+            // TODO probably we should just change the state and build the
+            // panel in update_main_panel().
             let file_number = self.save_nf();
             let rects: Vec<Rect> = split(
               &trim_margins(self.rect.clone(), 0.4, 0.4, 0.4, 0.4),

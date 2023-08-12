@@ -6,21 +6,24 @@ use futures::executor::block_on;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
+use std::path::Path;
 //use serde::{Deserialize, Serialize};
-//use std::fs::File;
-//use std::io::Write;
+use std::fs::File;
+use std::io::Read;
 //use std::path::Path;
 
 use super::canvas::{draw_entity, draw_floor, draw_mat_map};
 //use super::entity_edit::{EntityEdit, EntityEditCommand};
+use super::new_bf::{EntityStates, NewBF, NewBFState};
 use super::ui::{
   build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
 };
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
+use crate::state::entity::Team;
 //use crate::state::entity::{Mix, MixEntity, MovementType, Team};
 use crate::state::geometry::{board_iterator, Pos};
 //use crate::state::materials::Materials;
-//use crate::state::state::Tile;
+use crate::state::utils::get_next_file_number;
 
 const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
 
@@ -34,10 +37,11 @@ pub enum Command {
   Exit,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum LoadBFState {
   NoFiles,
-  Selected(usize),
+  Showing(usize, NewBFState),
+  NewSquad(NewBF),
 }
 
 pub struct LoadBF {
@@ -50,24 +54,41 @@ pub struct LoadBF {
 
 impl LoadBF {
   fn build_panel(&self, rect: &Rect) -> ButtonPanel<Command> {
+    let mut panel: ButtonPanel<Command> =
+      ButtonPanel::new(self.rect.clone(), (vec![], vec![], vec![], vec![], vec![]));
     match &self.state {
-      LoadBFState::NoFiles => unimplemented!(),
-      LoadBFState::Selected(s) => {
-        let mut rects: Vec<Rect> = split(rect, vec![0.0, 1.0], vec![0.0, 0.5, 1.0]);
-        let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
+      LoadBFState::NoFiles => {
+        let rects: Vec<Rect> = split(
+          &trim_margins(self.rect.clone(), 0.4, 0.4, 0.4, 0.4),
+          vec![0.0, 1.0],
+          vec![0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+        );
+        panel.push(Button::<Command>::new(
+          rects[0].clone(),
+          ("No levels".to_string(), Command::Exit, false, false),
+        ));
+      }
+      LoadBFState::Showing(s, _) => {
+        let rects: Vec<Rect> = split(rect, vec![0.0, 1.0], vec![0.0, 0.3, 0.6]);
+        panel.append(&mut build_incrementer::<Command>(
           &rects[0],
           "Level".to_string(),
           *s,
           Command::ChangeBF(Sign::Plus),
           Command::ChangeBF(Sign::Minus),
-        );
+        ));
         panel.push(Button::<Command>::new(
           rects[1].clone(),
           ("Load".to_string(), Command::SelectBF(*s), true, false),
         ));
-        panel
       }
+      LoadBFState::NewSquad(_) => {}
     }
+    panel.push(Button::<Command>::new(
+      trim_margins(self.rect.clone(), 0.7, 0.2, 0.1, 0.7),
+      ("Main Menu".to_string(), Command::Exit, true, false),
+    ));
+    panel
   }
 
   fn update_main_panel(&mut self) {
@@ -80,11 +101,18 @@ impl LoadBF {
     );
     let rects: Vec<Rect> = split(&left_rect, vec![0.0, 0.3, 1.0], vec![0.0, 0.8, 1.0]);
     let mut panel = self.build_panel(&rects[0]);
-    panel.push(Button::<Command>::new(
-      trim_margins(rects[3].clone(), 0.3, 0.3, 0.3, 0.3),
-      ("Back".to_string(), Command::Exit, true, false),
-    ));
     self.panel = panel;
+  }
+
+  fn load_file(n: usize) -> NewBFState {
+    let path = Path::new("./levels");
+    let dest_filename = format!("{:05}", n);
+    let mut dest = path.join(dest_filename);
+    dest.set_extension("lvl");
+    let mut file = File::open(dest).unwrap();
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).unwrap();
+    serde_json::from_str(&contents).unwrap()
   }
 }
 
@@ -100,9 +128,21 @@ impl Ui for LoadBF {
     for i in 0..(WIDTH * HEIGHT) {
       floor[i] = rng.gen_range(0..7);
     }
+
+    // find out if there exists file zero
+    let path = Path::new("./levels");
+    let dest_filename = "00000";
+    let mut dest = path.join(dest_filename);
+    dest.set_extension("lvl");
+    let file_zero_exists = dest.exists();
     let mut load_bf = LoadBF {
       rect: rect.clone(),
-      state: LoadBFState::Selected(0),
+      state: if file_zero_exists {
+        let state: NewBFState = Self::load_file(0);
+        LoadBFState::Showing(0, state)
+      } else {
+        LoadBFState::NoFiles
+      },
       floor,
       tileset,
       panel: ButtonPanel::new(rect, (vec![], vec![], vec![], vec![], vec![])),
@@ -112,26 +152,62 @@ impl Ui for LoadBF {
   }
 
   async fn draw(&self) {
-    self.panel.draw().await;
-    draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
-    //draw_mat_map(&self.state.tiles, XDISPL, YDISPL, &self.tileset).await;
-    for i in 0..=WIDTH {
-      draw_line(
-        XDISPL + (i as f32) * 16.0,
-        YDISPL,
-        XDISPL + (i as f32) * 16.0,
-        YDISPL + (60.0 * 16.0),
-        1.0,
-        SMOKE,
-      );
-      draw_line(
-        XDISPL,
-        YDISPL + (i as f32) * 16.0,
-        XDISPL + (60.0 * 16.0),
-        YDISPL + (i as f32) * 16.0,
-        1.0,
-        SMOKE,
-      );
+    match &self.state {
+      LoadBFState::Showing(_, bf_state) => {
+        draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
+        draw_mat_map(&bf_state.tiles, XDISPL, YDISPL, &self.tileset).await;
+        for pos in board_iterator() {
+          if pos.y >= HEIGHT / 2 {
+            if let Some(id) = &bf_state.tiles[pos.to_index()].entity_id {
+              if let EntityStates::Entity(e, _) = &bf_state.entities[*id] {
+                draw_entity(
+                  Some(&e.clone().try_into().unwrap()),
+                  XDISPL,
+                  YDISPL,
+                  pos,
+                  &self.tileset,
+                )
+                .await;
+                let mut f = e.clone();
+                f.team = Team::Red;
+                draw_entity(
+                  Some(&f.try_into().unwrap()),
+                  XDISPL,
+                  YDISPL,
+                  Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
+                  &self.tileset,
+                )
+                .await;
+              }
+            }
+          }
+        }
+        for i in 0..=WIDTH {
+          draw_line(
+            XDISPL + (i as f32) * 16.0,
+            YDISPL,
+            XDISPL + (i as f32) * 16.0,
+            YDISPL + (60.0 * 16.0),
+            1.0,
+            SMOKE,
+          );
+          draw_line(
+            XDISPL,
+            YDISPL + (i as f32) * 16.0,
+            XDISPL + (60.0 * 16.0),
+            YDISPL + (i as f32) * 16.0,
+            1.0,
+            SMOKE,
+          );
+        }
+        self.panel.draw().await;
+      }
+      LoadBFState::NoFiles => {
+        self.panel.draw().await;
+      }
+      LoadBFState::NewSquad(n) => {
+        n.draw().await;
+      }
     }
   }
 
@@ -139,12 +215,32 @@ impl Ui for LoadBF {
     let command = &self.panel.process_input(input.clone());
     match command {
       None => {}
-      Some(Command::SelectBF(level)) => {}
+      Some(Command::SelectBF(level)) => {
+        self.state = LoadBFState::NewSquad(NewBF::new(self.rect.clone(), ()));
+      }
       Some(Command::ChangeBF(sign)) => match &mut self.state {
-        LoadBFState::Selected(s) => {
-          *s = plus_minus(*s, *sign);
+        LoadBFState::Showing(s, bf_state) => {
+          let s_prime = plus_minus(*s, *sign);
+          let path = Path::new("./levels");
+          let dest_filename = format!("{:05}", s_prime);
+          let mut dest = path.join(dest_filename);
+          dest.set_extension("lvl");
+          if dest.exists() {
+            *s = s_prime;
+            let mut file = File::open(dest).unwrap();
+            let mut contents = String::new();
+            file.read_to_string(&mut contents).unwrap();
+            *bf_state = serde_json::from_str(&contents).unwrap();
+          }
         }
         LoadBFState::NoFiles => {}
+        LoadBFState::NewSquad(n) => match n.process_input(input.clone()) {
+          Some(()) => {
+            let state: NewBFState = Self::load_file(0);
+            self.state = LoadBFState::Showing(0, state);
+          }
+          _ => {}
+        },
       },
       Some(Command::Exit) => return Some(()),
     };
