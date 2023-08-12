@@ -66,7 +66,7 @@ pub enum TknButton {
 
 #[derive(Clone, Debug)]
 pub enum Command {
-  SaveAndExit,
+  Finish,
   MatPM(MatName, Sign),
   MatBrush(MatName),
   Token(TknButton, Sign),
@@ -76,6 +76,10 @@ pub enum Command {
   BotEdit(usize),
   BotAddSubs(usize),
   BotDelete(usize),
+  Save,
+  BackToEdit,
+  ExitWithoutSaving,
+  Exit,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,6 +92,8 @@ pub enum EntityStates {
 enum Screen {
   Map,
   Entity(EntityEdit, usize),
+  SaveDialogue(ButtonPanel<Command>),
+  DisplayFileNumber(ButtonPanel<Command>),
 }
 
 #[derive(Clone, Debug)]
@@ -304,7 +310,7 @@ impl NewBF {
     button_panel.append(&mut self.build_bot_panels(&rects[2]));
     button_panel.push(Button::<Command>::new(
       trim_margins(rects[3].clone(), 0.3, 0.3, 0.3, 0.3),
-      ("Save & Exit".to_string(), Command::SaveAndExit, true, false),
+      ("Save & Exit".to_string(), Command::Finish, true, false),
     ));
     for pos in board_iterator().into_iter() {
       button_panel.push(Button::<Command>::new(
@@ -320,7 +326,7 @@ impl NewBF {
     self.panel = button_panel;
   }
 
-  fn save_nf(&self) {
+  fn save_nf(&self) -> usize {
     let path = Path::new("./levels");
     assert!(path.is_dir());
     let mut i: usize = 0;
@@ -337,6 +343,38 @@ impl NewBF {
         break;
       }
     }
+    i
+  }
+
+  fn build_finish_dialogue(&self) -> ButtonPanel<Command> {
+    let rects: Vec<Rect> = split(
+      &trim_margins(self.rect.clone(), 0.4, 0.4, 0.4, 0.4),
+      vec![0.0, 1.0],
+      vec![0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+    );
+    let mut panel = ButtonPanel::new(self.rect.clone(), (vec![], vec![], vec![], vec![], vec![]));
+    panel.push(Button::<Command>::new(
+      rects[0].clone(),
+      ("Save?".to_string(), Command::BackToEdit, false, false),
+    ));
+    panel.push(Button::<Command>::new(
+      rects[1].clone(),
+      ("Return".to_string(), Command::BackToEdit, true, false),
+    ));
+    panel.push(Button::<Command>::new(
+      rects[2].clone(),
+      ("Save".to_string(), Command::Save, true, false),
+    ));
+    panel.push(Button::<Command>::new(
+      rects[3].clone(),
+      (
+        "Discard".to_string(),
+        Command::ExitWithoutSaving,
+        true,
+        false,
+      ),
+    ));
+    panel
   }
 }
 
@@ -442,6 +480,12 @@ impl Ui for NewBF {
       Screen::Entity(ee, _) => {
         draw_rectangle(self.rect.x, self.rect.y, self.rect.w, self.rect.h, SMOKE);
         ee.draw().await;
+      }
+      Screen::SaveDialogue(panel) => {
+        panel.draw().await;
+      }
+      Screen::DisplayFileNumber(panel) => {
+        panel.draw().await;
       }
     }
   }
@@ -579,15 +623,16 @@ impl Ui for NewBF {
           },
           Some(Command::BotAddSubs(_)) => {}
           Some(Command::BotDelete(i)) => self.state.entities[i] = EntityStates::Empty,
-          Some(Command::SaveAndExit) => {
-            self.save_nf();
-            return Some(());
+          Some(Command::Finish) => {
+            self.screen = Screen::SaveDialogue(self.build_finish_dialogue());
+            return None;
           }
+          _ => {}
         };
         self.update_main_panel();
         if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) = input {
-          self.save_nf();
-          Some(())
+          self.screen = Screen::SaveDialogue(self.build_finish_dialogue());
+          None
         } else {
           None
         }
@@ -618,6 +663,51 @@ impl Ui for NewBF {
         }
         _ => None,
       },
+      Screen::SaveDialogue(panel) => {
+        let command = panel.process_input(input.clone());
+        match command {
+          Some(Command::Save) => {
+            let file_number = self.save_nf();
+            let rects: Vec<Rect> = split(
+              &trim_margins(self.rect.clone(), 0.4, 0.4, 0.4, 0.4),
+              vec![0.0, 1.0],
+              vec![0.0, 0.2, 0.4, 0.6, 0.8, 1.0],
+            );
+            let mut panel =
+              ButtonPanel::new(rects[0].clone(), (vec![], vec![], vec![], vec![], vec![]));
+            panel.push(Button::<Command>::new(
+              rects[0].clone(),
+              (
+                format! {"Saved to: {:05}", file_number},
+                Command::BackToEdit,
+                false,
+                false,
+              ),
+            ));
+            panel.push(Button::<Command>::new(
+              rects[1].clone(),
+              ("Main Menu".to_string(), Command::Exit, true, false),
+            ));
+            self.screen = Screen::DisplayFileNumber(panel);
+          }
+          Some(Command::BackToEdit) => {
+            self.screen = Screen::Map;
+            self.update_main_panel();
+          }
+          Some(Command::ExitWithoutSaving) => return Some(()),
+          _ => {}
+        }
+        None
+      }
+      Screen::DisplayFileNumber(panel) => {
+        let command = panel.process_input(input.clone());
+        match command {
+          Some(Command::Exit) => return Some(()),
+          _ => {}
+        }
+
+        None
+      }
     }
   }
 }
