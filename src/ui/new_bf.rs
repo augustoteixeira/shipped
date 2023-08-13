@@ -45,6 +45,7 @@ pub enum MatName {
 
 #[derive(Clone, Debug)]
 pub enum Brush {
+  Eraser,
   Carbon,
   Silicon,
   Plutonium,
@@ -73,6 +74,7 @@ pub enum Command {
   MapLeftClk(Pos),
   BotNumber(usize, Sign),
   BotBrush(usize),
+  EraserBrush,
   BotEdit(usize),
   BotAddSubs(usize),
   BotDelete(usize),
@@ -181,6 +183,7 @@ impl NewBF {
       Brush::Plutonium => alerts[2] = true,
       Brush::Copper => alerts[3] = true,
       Brush::Bot(_) => {}
+      Brush::Eraser => {}
     }
     let mut material_brush_buttons = ButtonPanel::<Command>::new(
       Rect::new(0.0, 0.0, 1000.0, 1000.0),
@@ -191,7 +194,7 @@ impl NewBF {
   }
 
   fn build_token_panel(&self, rect: &Rect) -> ButtonPanel<Command> {
-    let rects = split(&rect.clone(), vec![0.25, 0.5, 0.75], vec![0.0, 0.75]);
+    let rects = split(&rect.clone(), vec![0.25, 0.5, 0.75, 1.0], vec![0.0, 0.75]);
     let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
       &rects[0],
       "Tokens".to_string(),
@@ -205,6 +208,15 @@ impl NewBF {
       self.state.min_tokens,
       Command::Token(TknButton::MinTkns, Sign::Plus),
       Command::Token(TknButton::MinTkns, Sign::Minus),
+    ));
+    panel.push(Button::<Command>::new(
+      rects[2].clone(),
+      (
+        "Erase".to_string(),
+        Command::EraserBrush,
+        true,
+        matches!(self.brush, Brush::Eraser),
+      ),
     ));
     panel
   }
@@ -378,36 +390,39 @@ impl NewBF {
 #[async_trait]
 impl Ui for NewBF {
   type Command = ();
-  type Builder = ();
+  type Builder = Option<NewBFState>;
 
-  fn new(rect: Rect, _: ()) -> Self {
+  fn new(rect: Rect, builder: Option<NewBFState>) -> Self {
     let tileset = block_on(load_texture("assets/tileset.png")).unwrap();
     let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(25).try_into().unwrap();
     let mut floor = [0; WIDTH * HEIGHT];
     for i in 0..(WIDTH * HEIGHT) {
       floor[i] = rng.gen_range(0..7);
     }
-    let new_bf_state = NewBFState {
-      materials: Materials {
-        carbon: 0,
-        silicon: 0,
-        plutonium: 0,
-        copper: 0,
+    let new_bf_state = match builder {
+      None => NewBFState {
+        materials: Materials {
+          carbon: 0,
+          silicon: 0,
+          plutonium: 0,
+          copper: 0,
+        },
+        tokens: 0,
+        min_tokens: 0,
+        tiles: (0..(WIDTH * HEIGHT))
+          .map(|_| Tile {
+            entity_id: None,
+            materials: Materials {
+              carbon: 0,
+              silicon: 0,
+              plutonium: 0,
+              copper: 0,
+            },
+          })
+          .collect(),
+        entities: construct_entities(),
       },
-      tokens: 0,
-      min_tokens: 0,
-      tiles: (0..(WIDTH * HEIGHT))
-        .map(|_| Tile {
-          entity_id: None,
-          materials: Materials {
-            carbon: 0,
-            silicon: 0,
-            plutonium: 0,
-            copper: 0,
-          },
-        })
-        .collect(),
-      entities: construct_entities(),
+      Some(state) => state,
     };
     let mut new_bf = NewBF {
       screen: Screen::Map,
@@ -577,6 +592,13 @@ impl Ui for NewBF {
             Brush::Bot(i) => {
               self.state.tiles[pos.to_index()].entity_id = Some(i);
             }
+            Brush::Eraser => {
+              self.state.tiles[pos.to_index()].entity_id = None;
+              self.state.tiles[pos.to_index()].materials.carbon = 0;
+              self.state.tiles[pos.to_index()].materials.silicon = 0;
+              self.state.tiles[pos.to_index()].materials.plutonium = 0;
+              self.state.tiles[pos.to_index()].materials.copper = 0;
+            }
           },
           Some(Command::BotNumber(i, sign)) => match &mut self.state.entities[i] {
             EntityStates::Empty => {}
@@ -625,6 +647,9 @@ impl Ui for NewBF {
           Some(Command::Finish) => {
             self.screen = Screen::SaveDialogue(self.build_finish_dialogue());
             return None;
+          }
+          Some(Command::EraserBrush) => {
+            self.brush = Brush::Eraser;
           }
           _ => {}
         };

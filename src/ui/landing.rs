@@ -99,7 +99,7 @@ impl Ui for Landing {
             None
           }
           Some(Selection::NewBF) => {
-            self.state = LandingState::NewBF(NewBF::new(self.rect.clone(), ()));
+            self.state = LandingState::NewBF(NewBF::new(self.rect.clone(), None));
             None
           }
           Some(Selection::LoadBF) => {

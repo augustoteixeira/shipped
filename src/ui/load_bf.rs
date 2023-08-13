@@ -18,12 +18,11 @@ use super::new_bf::{EntityStates, NewBF, NewBFState};
 use super::ui::{
   build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
 };
-use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
+use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::Team;
 //use crate::state::entity::{Mix, MixEntity, MovementType, Team};
 use crate::state::geometry::{board_iterator, Pos};
 //use crate::state::materials::Materials;
-use crate::state::utils::get_next_file_number;
 
 const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
 
@@ -100,19 +99,22 @@ impl LoadBF {
       0.05,
     );
     let rects: Vec<Rect> = split(&left_rect, vec![0.0, 0.3, 1.0], vec![0.0, 0.8, 1.0]);
-    let mut panel = self.build_panel(&rects[0]);
-    self.panel = panel;
+    self.panel = self.build_panel(&rects[0]);
   }
 
-  fn load_file(n: usize) -> NewBFState {
+  fn load_file(n: usize) -> Option<NewBFState> {
     let path = Path::new("./levels");
     let dest_filename = format!("{:05}", n);
     let mut dest = path.join(dest_filename);
     dest.set_extension("lvl");
-    let mut file = File::open(dest).unwrap();
-    let mut contents = String::new();
-    file.read_to_string(&mut contents).unwrap();
-    serde_json::from_str(&contents).unwrap()
+    if dest.exists() {
+      let mut file = File::open(dest).unwrap();
+      let mut contents = String::new();
+      file.read_to_string(&mut contents).unwrap();
+      Some(serde_json::from_str(&contents).unwrap())
+    } else {
+      None
+    }
   }
 }
 
@@ -128,20 +130,12 @@ impl Ui for LoadBF {
     for i in 0..(WIDTH * HEIGHT) {
       floor[i] = rng.gen_range(0..7);
     }
-
     // find out if there exists file zero
-    let path = Path::new("./levels");
-    let dest_filename = "00000";
-    let mut dest = path.join(dest_filename);
-    dest.set_extension("lvl");
-    let file_zero_exists = dest.exists();
     let mut load_bf = LoadBF {
       rect: rect.clone(),
-      state: if file_zero_exists {
-        let state: NewBFState = Self::load_file(0);
-        LoadBFState::Showing(0, state)
-      } else {
-        LoadBFState::NoFiles
+      state: match Self::load_file(0) {
+        Some(state) => LoadBFState::Showing(0, state),
+        None => LoadBFState::NoFiles,
       },
       floor,
       tileset,
@@ -216,20 +210,17 @@ impl Ui for LoadBF {
     match &mut self.state {
       LoadBFState::Showing(s, bf_state) => match command {
         Some(Command::SelectBF(level)) => {
-          self.state = LoadBFState::NewSquad(NewBF::new(self.rect.clone(), ()));
+          self.state =
+            LoadBFState::NewSquad(NewBF::new(self.rect.clone(), Self::load_file(*level)));
         }
         Some(Command::ChangeBF(sign)) => {
           let s_prime = plus_minus(*s, *sign);
-          let path = Path::new("./levels");
-          let dest_filename = format!("{:05}", s_prime);
-          let mut dest = path.join(dest_filename);
-          dest.set_extension("lvl");
-          if dest.exists() {
-            *s = s_prime;
-            let mut file = File::open(dest).unwrap();
-            let mut contents = String::new();
-            file.read_to_string(&mut contents).unwrap();
-            *bf_state = serde_json::from_str(&contents).unwrap();
+          match Self::load_file(s_prime) {
+            Some(state) => {
+              *bf_state = state;
+              *s = s_prime;
+            }
+            _ => {}
           }
         }
         Some(Command::Exit) => {
@@ -244,8 +235,9 @@ impl Ui for LoadBF {
       }
       LoadBFState::NewSquad(n) => match n.process_input(input.clone()) {
         Some(()) => {
-          let state: NewBFState = Self::load_file(0);
-          self.state = LoadBFState::Showing(0, state);
+          if let Some(state) = Self::load_file(0) {
+            self.state = LoadBFState::Showing(0, state);
+          }
         }
         _ => {}
       },
