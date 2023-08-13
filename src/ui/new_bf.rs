@@ -7,6 +7,7 @@ use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
+use snafu::prelude::*;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -25,6 +26,12 @@ const XDISPL: f32 = 800.0;
 const YDISPL: f32 = 30.0;
 
 const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
+
+#[derive(Debug, Snafu)]
+pub enum ValidationError {
+  #[snafu(display("Not enough {:?}", material))]
+  NotEnoughMaterial { material: MatName },
+}
 
 fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
   [
@@ -100,8 +107,8 @@ enum Screen {
 
 #[derive(Clone, Debug)]
 pub enum NewBFType {
-  BrandNew(NewBFState),
-  Derived(NewBFState, NewBFState),
+  BrandNew,
+  Derived(NewBFState),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -116,6 +123,8 @@ pub struct NewBFState {
 #[derive(Debug)]
 pub struct NewBF {
   state: NewBFState,
+  old_state: NewBFState,
+  message: String,
   brush: Brush,
   screen: Screen,
   rect: Rect,
@@ -282,28 +291,28 @@ impl NewBF {
   }
 
   fn validate_state(&mut self) {
-    match self.new_type.clone() {
-      NewBFType::BrandNew(nf_old) => {
-        if !self.is_valid() {
-          self.revert_from(&nf_old);
-        } else {
-          self.new_type = NewBFType::BrandNew(self.state.clone());
-        }
+    match self.is_valid() {
+      Ok(true) => self.old_state = self.state.clone(),
+      Ok(false) => self.revert_from(&self.old_state.clone()),
+      Err(e) => {
+        self.message = format!("{}", e);
+        self.revert_from(&self.old_state.clone());
       }
-      NewBFType::Derived(nf_reference, nf_old) => {
-        if !self.is_valid() {
-          self.revert_from(&nf_old);
-        } else {
-          self.new_type = NewBFType::Derived(nf_reference, self.state.clone());
-        }
-      }
-    }
+    };
   }
 
-  fn is_valid(&self) -> bool {
+  fn is_valid(&self) -> Result<bool, ValidationError> {
     match self.new_type.clone() {
-      NewBFType::BrandNew(_) => true,
-      NewBFType::Derived(_, _) => true,
+      NewBFType::BrandNew => Ok(true),
+      NewBFType::Derived(reference) => {
+        if self.state.materials.carbon > 3 {
+          return Err(ValidationError::NotEnoughMaterial {
+            material: MatName::Carbon,
+          });
+        } else {
+          return Ok(true);
+        };
+      }
     }
   }
 
@@ -399,7 +408,7 @@ impl Ui for NewBF {
     for i in 0..(WIDTH * HEIGHT) {
       floor[i] = rng.gen_range(0..7);
     }
-    let new_bf_state = match builder {
+    let new_bf_state = match &builder {
       None => NewBFState {
         materials: Materials {
           carbon: 0,
@@ -422,17 +431,22 @@ impl Ui for NewBF {
           .collect(),
         entities: construct_entities(),
       },
-      Some(state) => state,
+      Some(state) => state.clone(),
     };
     let mut new_bf = NewBF {
       screen: Screen::Map,
+      message: "Editing field".to_string(),
       brush: Brush::Carbon,
       rect: rect.clone(),
       state: new_bf_state.clone(),
+      old_state: new_bf_state.clone(),
       floor,
       tileset,
       panel: ButtonPanel::new(rect, (vec![], vec![], vec![], vec![], vec![])),
-      new_type: NewBFType::BrandNew(new_bf_state),
+      new_type: match builder {
+        None => NewBFType::BrandNew,
+        Some(_) => NewBFType::Derived(new_bf_state),
+      },
     };
     new_bf.update_main_panel();
     new_bf
@@ -440,6 +454,7 @@ impl Ui for NewBF {
 
   async fn draw(&self) {
     self.panel.draw().await;
+    draw_text(&self.message, 20.0, 40.0, 40.0, DARKBLUE);
     draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
     draw_mat_map(&self.state.tiles, XDISPL, YDISPL, &self.tileset).await;
     draw_rectangle(XDISPL, YDISPL, 16.0 * 60.0, 16.0 * 30.0, SMOKE);
@@ -505,6 +520,9 @@ impl Ui for NewBF {
   }
 
   fn process_input(&mut self, input: Input) -> Option<()> {
+    if let Input::Click(_, _) = input.clone() {
+      self.message = "Editing field".to_string();
+    }
     match &mut self.screen {
       Screen::Map => {
         let command = self.panel.process_input(input.clone());
