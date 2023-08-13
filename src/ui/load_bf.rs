@@ -213,13 +213,12 @@ impl Ui for LoadBF {
 
   fn process_input(&mut self, input: Input) -> Option<()> {
     let command = &self.panel.process_input(input.clone());
-    match command {
-      None => {}
-      Some(Command::SelectBF(level)) => {
-        self.state = LoadBFState::NewSquad(NewBF::new(self.rect.clone(), ()));
-      }
-      Some(Command::ChangeBF(sign)) => match &mut self.state {
-        LoadBFState::Showing(s, bf_state) => {
+    match &mut self.state {
+      LoadBFState::Showing(s, bf_state) => match command {
+        Some(Command::SelectBF(level)) => {
+          self.state = LoadBFState::NewSquad(NewBF::new(self.rect.clone(), ()));
+        }
+        Some(Command::ChangeBF(sign)) => {
           let s_prime = plus_minus(*s, *sign);
           let path = Path::new("./levels");
           let dest_filename = format!("{:05}", s_prime);
@@ -233,16 +232,23 @@ impl Ui for LoadBF {
             *bf_state = serde_json::from_str(&contents).unwrap();
           }
         }
-        LoadBFState::NoFiles => {}
-        LoadBFState::NewSquad(n) => match n.process_input(input.clone()) {
-          Some(()) => {
-            let state: NewBFState = Self::load_file(0);
-            self.state = LoadBFState::Showing(0, state);
-          }
-          _ => {}
-        },
+        Some(Command::Exit) => {
+          return Some(());
+        }
+        _ => {}
       },
-      Some(Command::Exit) => return Some(()),
+      LoadBFState::NoFiles => {
+        if let Some(Command::Exit) = command {
+          return Some(());
+        }
+      }
+      LoadBFState::NewSquad(n) => match n.process_input(input.clone()) {
+        Some(()) => {
+          let state: NewBFState = Self::load_file(0);
+          self.state = LoadBFState::Showing(0, state);
+        }
+        _ => {}
+      },
     };
     self.update_main_panel();
     if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) = input {
