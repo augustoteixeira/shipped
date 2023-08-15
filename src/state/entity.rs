@@ -80,6 +80,49 @@ pub type HalfEntity = Entity<Half>;
 pub type FullEntity = Entity<Full>;
 pub type MixEntity = Entity<Mix>;
 
+#[rustfmt::skip]
+pub fn same_bare<T, S> (a: &Entity<T>, b: &Entity<S>) -> bool {
+  if a.tokens != b.tokens { return false; }
+  if a.hp != b.hp { return false; }
+  if a.inventory_size != b.inventory_size { return false; }
+  if a.materials != b.materials { return false; }
+  if a.movement_type != b.movement_type { return false; }
+  if a.gun_damage != b.gun_damage { return false; }
+  if a.drill_damage != b.drill_damage { return false; }
+  return true;
+}
+
+impl MixEntity {
+  #[rustfmt::skip]
+  pub fn compatible(&self, refer: &MixEntity) -> bool {
+    if !same_bare(self, refer) { return false; }
+    match self {
+      Entity { brain: Mix::Bare, .. } => {
+        if !matches!(refer, Entity { brain: Mix::Bare, .. }) { return false; }
+      }
+      Entity { brain: Mix::Half(h), .. } => {
+        if matches!(refer, Entity { brain: Mix::Full(_), .. }) { return false; }
+        if let Mix::Half(h2) = refer.brain {
+          if *h != h2 { return false; }
+        }
+      }
+      Entity { brain: Mix::Full(f), .. } => {
+        if let Mix::Half(h) = refer.brain {
+          if f.half != h { return false; }
+        }
+        if let Mix::Full(Full{
+          half: h, code_index: c, gas: g
+        }) = refer.brain {
+          if f.half != h { return false; }
+          if f.code_index != c { return false; }
+          if f.gas != g { return false; }
+        }
+      }
+    }
+    true
+  }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TemplateEntity {
   pub hp: usize,
@@ -110,8 +153,25 @@ impl TryFrom<Entity<Mix>> for Entity<Full> {
         message: mix.message,
         brain: f,
       });
+    } else {
+      return Ok(FullEntity {
+        tokens: mix.tokens,
+        team: mix.team,
+        pos: mix.pos,
+        hp: mix.hp,
+        inventory_size: mix.inventory_size,
+        materials: mix.materials,
+        movement_type: mix.movement_type,
+        gun_damage: mix.gun_damage,
+        drill_damage: mix.drill_damage,
+        message: mix.message,
+        brain: Full {
+          half: [0, 0],
+          code_index: 0,
+          gas: 0,
+        },
+      });
     }
-    Err("Mix entity is not full to convert.")
   }
 }
 

@@ -31,6 +31,14 @@ const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
 pub enum ValidationError {
   #[snafu(display("Not enough {:?}", material))]
   NotEnoughMaterial { material: MatName },
+  #[snafu(display("Cannot remove entity from level ({:}, {:})", pos.x, pos.y))]
+  RemoveEntityFromLevel { pos: Pos },
+  #[snafu(display("Cannot remove material from level ({:}, {:})", pos.x, pos.y))]
+  RemoveMaterialFromLevel { pos: Pos },
+  #[snafu(display("Cannot delete bot {:} from level", index))]
+  RemoveBotFromLevel { index: usize },
+  #[snafu(display("Bot {:} needs to be compatible with level", index))]
+  IncompatibleBot { index: usize },
 }
 
 fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
@@ -251,7 +259,7 @@ impl NewBF {
         ));
         return panel;
       }
-      EntityStates::Entity(e, number) => {
+      EntityStates::Entity(_, number) => {
         panel.append(&mut build_incrementer::<Command>(
           &rects[0],
           format!("Bot {}", index).to_string(),
@@ -269,18 +277,18 @@ impl NewBF {
           trim_margins(rects[2].clone(), 0.2, 0.2, 0.1, 0.1),
           ("Delete".to_string(), Command::BotDelete(index), true, false),
         ));
-        // if full, add brush
-        if let Mix::Full(_) = e.brain {
-          panel.push(Button::<Command>::new(
-            trim_margins(rects[3].clone(), 0.2, 0.2, 0.1, 0.1),
-            (
-              "Use".to_string(),
-              Command::BotBrush(index),
-              true,
-              (matches!(&self.brush, Brush::Bot(i) if index == *i)),
-            ),
-          ));
-        }
+        // add brush
+        //if let Mix::Full(_) = e.brain {
+        panel.push(Button::<Command>::new(
+          trim_margins(rects[3].clone(), 0.2, 0.2, 0.1, 0.1),
+          (
+            "Use".to_string(),
+            Command::BotBrush(index),
+            true,
+            (matches!(&self.brush, Brush::Bot(i) if index == *i)),
+          ),
+        ));
+        //}
       }
     }
     panel
@@ -309,9 +317,54 @@ impl NewBF {
           return Err(ValidationError::NotEnoughMaterial {
             material: MatName::Carbon,
           });
-        } else {
-          return Ok(true);
+        }
+        let mut total_board_material = Materials {
+          carbon: 0,
+          silicon: 0,
+          plutonium: 0,
+          copper: 0,
         };
+        let mut extra_entities = [0, 0, 0, 0];
+        // loop through board, verify deletions and summing materials/entities
+        for pos in board_iterator() {
+          let ref_entity = reference.tiles[pos.to_index()].entity_id;
+          let new_entity = self.state.tiles[pos.to_index()].entity_id;
+          if ref_entity.is_some() && new_entity != ref_entity {
+            return Err(ValidationError::RemoveEntityFromLevel { pos });
+          }
+          if let Some(e) = new_entity {
+            if ref_entity.is_none() {
+              extra_entities[e] += 1;
+            }
+          }
+          let ref_mat = &reference.tiles[pos.to_index()].materials;
+          let new_mat = &self.state.tiles[pos.to_index()].materials;
+          if new_mat < ref_mat {
+            return Err(ValidationError::RemoveMaterialFromLevel { pos });
+          }
+          total_board_material += new_mat.clone();
+        }
+        // loop through templates, verifying bots and summing entities
+        for i in 0..NUM_TEMPLATES {
+          let new_entity = &self.state.entities[i];
+          let ref_entity = &reference.entities[i];
+          match new_entity {
+            EntityStates::Empty => {
+              if !matches!(ref_entity, EntityStates::Empty) {
+                return Err(ValidationError::RemoveBotFromLevel { index: i });
+              }
+            }
+            EntityStates::Entity(e, k) => {
+              if let EntityStates::Entity(ref_e, _) = ref_entity {
+                if !e.compatible(ref_e) {
+                  return Err(ValidationError::IncompatibleBot { index: i });
+                }
+              }
+              extra_entities[i] += k;
+            }
+          }
+        }
+        Ok(true)
       }
     }
   }
@@ -610,13 +663,25 @@ impl Ui for NewBF {
             Brush::Bot(i) => {
               self.state.tiles[pos.to_index()].entity_id = Some(i);
             }
-            Brush::Eraser => {
-              self.state.tiles[pos.to_index()].entity_id = None;
-              self.state.tiles[pos.to_index()].materials.carbon = 0;
-              self.state.tiles[pos.to_index()].materials.silicon = 0;
-              self.state.tiles[pos.to_index()].materials.plutonium = 0;
-              self.state.tiles[pos.to_index()].materials.copper = 0;
-            }
+            Brush::Eraser => match &self.new_type {
+              NewBFType::BrandNew => {
+                self.state.tiles[pos.to_index()].entity_id = None;
+                self.state.tiles[pos.to_index()].materials.carbon = 0;
+                self.state.tiles[pos.to_index()].materials.silicon = 0;
+                self.state.tiles[pos.to_index()].materials.plutonium = 0;
+                self.state.tiles[pos.to_index()].materials.copper = 0;
+              }
+              NewBFType::Derived(reference) => {
+                self.state.tiles[pos.to_index()].entity_id =
+                  reference.tiles[pos.to_index()].entity_id;
+                self.state.tiles[pos.to_index()].materials.carbon =
+                  reference.tiles[pos.to_index()].materials.carbon;
+                self.state.tiles[pos.to_index()].materials.silicon =
+                  reference.tiles[pos.to_index()].materials.silicon;
+                self.state.tiles[pos.to_index()].materials.plutonium =
+                  reference.tiles[pos.to_index()].materials.plutonium;
+              }
+            },
           },
           Some(Command::BotNumber(i, sign)) => match &mut self.state.entities[i] {
             EntityStates::Empty => {}
