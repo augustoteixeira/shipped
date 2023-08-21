@@ -39,6 +39,8 @@ pub enum ValidationError {
   RemoveBotFromLevel { index: usize },
   #[snafu(display("Bot {:} needs to be compatible with level", index))]
   IncompatibleBot { index: usize },
+  #[snafu(display("Some entities {:} disapeared", index))]
+  EntitiesDisappeared { index: usize },
 }
 
 fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
@@ -313,13 +315,13 @@ impl NewBF {
     match self.new_type.clone() {
       NewBFType::BrandNew => Ok(true),
       NewBFType::Derived(reference) => {
-        let mut total_board_material = Materials {
+        let mut extra_material = Materials {
           carbon: 0,
           silicon: 0,
           plutonium: 0,
           copper: 0,
         };
-        let mut extra_entities = [0, 0, 0, 0];
+        let mut extra_entities: [i64; 4] = [0, 0, 0, 0];
         // loop through board, verify deletions and summing materials/entities
         for pos in board_iterator() {
           let ref_entity = reference.tiles[pos.to_index()].entity_id;
@@ -338,10 +340,10 @@ impl NewBF {
           }
           let ref_mat = &reference.tiles[pos.to_index()].materials;
           let new_mat = &self.state.tiles[pos.to_index()].materials;
-          if new_mat < ref_mat {
+          if !(ref_mat <= new_mat) {
             return Err(ValidationError::RemoveMaterialFromLevel { pos });
           }
-          total_board_material += new_mat.clone();
+          extra_material += new_mat.clone() - ref_mat.clone();
         }
         // loop through templates, verifying bots and summing entities
         for i in 0..NUM_TEMPLATES {
@@ -354,12 +356,16 @@ impl NewBF {
               }
             }
             EntityStates::Entity(e, k) => {
-              if let EntityStates::Entity(ref_e, _) = ref_entity {
+              if let EntityStates::Entity(ref_e, ref_k) = ref_entity {
                 if !e.compatible(ref_e) {
                   return Err(ValidationError::IncompatibleBot { index: i });
                 }
+                extra_entities[i] -= *ref_k as i64;
               }
-              extra_entities[i] += k;
+              extra_entities[i] += *k as i64;
+              if extra_entities[i] < 0 {
+                return Err(ValidationError::EntitiesDisappeared { index: i });
+              }
             }
           }
         }
@@ -642,43 +648,73 @@ impl Ui for NewBF {
           },
           Some(Command::MapLeftClk(pos)) => match self.brush {
             Brush::Carbon => {
-              self.state.tiles[pos.to_index()].materials.carbon += 1;
-              self.state.tiles[pos.invert().to_index()].materials.carbon += 1;
+              if self.state.materials.carbon > 0 {
+                self.state.materials.carbon -= 1;
+                self.state.tiles[pos.to_index()].materials.carbon += 1;
+                self.state.tiles[pos.invert().to_index()].materials.carbon += 1;
+              }
             }
             Brush::Silicon => {
-              self.state.tiles[pos.to_index()].materials.silicon += 1;
-              self.state.tiles[pos.invert().to_index()].materials.silicon += 1;
+              if self.state.materials.silicon > 0 {
+                self.state.materials.silicon -= 1;
+                self.state.tiles[pos.to_index()].materials.silicon += 1;
+                self.state.tiles[pos.invert().to_index()].materials.silicon += 1;
+              }
             }
             Brush::Plutonium => {
-              self.state.tiles[pos.to_index()].materials.plutonium += 1;
-              self.state.tiles[pos.invert().to_index()]
-                .materials
-                .plutonium += 1;
+              if self.state.materials.plutonium > 0 {
+                self.state.materials.plutonium -= 1;
+                self.state.tiles[pos.to_index()].materials.plutonium += 1;
+                self.state.tiles[pos.invert().to_index()]
+                  .materials
+                  .plutonium += 1;
+              }
             }
             Brush::Copper => {
-              self.state.tiles[pos.to_index()].materials.copper += 1;
-              self.state.tiles[pos.invert().to_index()].materials.copper += 1;
+              if self.state.materials.copper > 0 {
+                self.state.materials.copper -= 1;
+                self.state.tiles[pos.to_index()].materials.copper += 1;
+                self.state.tiles[pos.invert().to_index()].materials.copper += 1;
+              }
             }
             Brush::Bot(i) => {
-              self.state.tiles[pos.to_index()].entity_id = Some(i);
+              if let EntityStates::Entity(_, k) = &mut self.state.entities[i] {
+                if *k > 0 && self.state.tiles[pos.to_index()].entity_id.is_none() {
+                  *k -= 1;
+                  self.state.tiles[pos.to_index()].entity_id = Some(i);
+                }
+              }
             }
             Brush::Eraser => match &self.new_type {
               NewBFType::BrandNew => {
-                self.state.tiles[pos.to_index()].entity_id = None;
-                self.state.tiles[pos.to_index()].materials.carbon = 0;
-                self.state.tiles[pos.to_index()].materials.silicon = 0;
-                self.state.tiles[pos.to_index()].materials.plutonium = 0;
-                self.state.tiles[pos.to_index()].materials.copper = 0;
+                let tile = &mut self.state.tiles[pos.to_index()];
+                if let Some(i) = &mut tile.entity_id {
+                  if let EntityStates::Entity(_, k) = &mut self.state.entities[*i] {
+                    *k += 1;
+                  }
+                  tile.entity_id = None;
+                }
+                self.state.materials += tile.materials.clone();
+                tile.materials.carbon = 0;
+                tile.materials.silicon = 0;
+                tile.materials.plutonium = 0;
+                tile.materials.copper = 0;
               }
               NewBFType::Derived(reference) => {
-                self.state.tiles[pos.to_index()].entity_id =
-                  reference.tiles[pos.to_index()].entity_id;
-                self.state.tiles[pos.to_index()].materials.carbon =
-                  reference.tiles[pos.to_index()].materials.carbon;
-                self.state.tiles[pos.to_index()].materials.silicon =
-                  reference.tiles[pos.to_index()].materials.silicon;
-                self.state.tiles[pos.to_index()].materials.plutonium =
-                  reference.tiles[pos.to_index()].materials.plutonium;
+                let tile = &mut self.state.tiles[pos.to_index()];
+                let ref_tile = &reference.tiles[pos.to_index()];
+                if let Some(i) = &mut tile.entity_id {
+                  if ref_tile.entity_id.is_none() {
+                    if let EntityStates::Entity(_, k) = &mut self.state.entities[*i] {
+                      *k += 1;
+                    }
+                    tile.entity_id = None;
+                  }
+                }
+                if tile.materials >= ref_tile.materials {
+                  self.state.materials += tile.materials.clone() - ref_tile.materials.clone();
+                  tile.materials = ref_tile.materials.clone();
+                }
               }
             },
           },
