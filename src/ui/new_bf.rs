@@ -313,11 +313,6 @@ impl NewBF {
     match self.new_type.clone() {
       NewBFType::BrandNew => Ok(true),
       NewBFType::Derived(reference) => {
-        if self.state.materials.carbon > 3 {
-          return Err(ValidationError::NotEnoughMaterial {
-            material: MatName::Carbon,
-          });
-        }
         let mut total_board_material = Materials {
           carbon: 0,
           silicon: 0,
@@ -329,12 +324,16 @@ impl NewBF {
         for pos in board_iterator() {
           let ref_entity = reference.tiles[pos.to_index()].entity_id;
           let new_entity = self.state.tiles[pos.to_index()].entity_id;
-          if ref_entity.is_some() && new_entity != ref_entity {
-            return Err(ValidationError::RemoveEntityFromLevel { pos });
-          }
-          if let Some(e) = new_entity {
-            if ref_entity.is_none() {
-              extra_entities[e] += 1;
+          match ref_entity {
+            Some(_) => {
+              if new_entity != ref_entity {
+                return Err(ValidationError::RemoveEntityFromLevel { pos });
+              }
+            }
+            None => {
+              if let Some(e) = new_entity {
+                extra_entities[e] += 1;
+              }
             }
           }
           let ref_mat = &reference.tiles[pos.to_index()].materials;
