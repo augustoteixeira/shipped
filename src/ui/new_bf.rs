@@ -16,7 +16,7 @@ use super::canvas::{draw_entity, draw_floor, draw_mat_map};
 use super::entity_edit::{EntityEdit, EntityEditCommand};
 use super::ui::{build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect, Ui};
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
-use crate::state::entity::{Mix, MixEntity, MovementType, Team};
+use crate::state::entity::{cost, FullEntity, Mix, MixEntity, MovementType, Team};
 use crate::state::geometry::{board_iterator, Pos};
 use crate::state::materials::Materials;
 use crate::state::state::Tile;
@@ -128,6 +128,52 @@ pub struct NewBFState {
   pub min_tokens: usize,
   pub tiles: Vec<Tile>,
   pub entities: [EntityStates; NUM_TEMPLATES],
+}
+
+impl NewBFState {
+  pub fn cost(&self, new_bf_state: NewBFState) -> Materials {
+    let mut material_cost = Materials {
+      carbon: 0,
+      silicon: 0,
+      plutonium: 0,
+      copper: 0,
+    };
+    let mut entities: [i64; 4] = [0, 0, 0, 0];
+    // loop through board, summing materials/entities
+    for pos in board_iterator() {
+      let tile_entity = self.tiles[pos.to_index()].entity_id;
+      if let Some(e) = tile_entity {
+        entities[e] += 1;
+      }
+      let tile_material = &self.state.tiles[pos.to_index()].materials;
+      material_cost += tile_material.clone();
+    }
+    // loop through templates, summing entities costs
+    for i in 0..NUM_TEMPLATES {
+      let new_entity = &self.state.entities[i];
+      let ref_entity = &reference.entities[i];
+      match new_entity {
+        EntityStates::Empty => {
+          if !matches!(ref_entity, EntityStates::Empty) {
+            return Err(ValidationError::RemoveBotFromLevel { index: i });
+          }
+        }
+        EntityStates::Entity(e, k) => {
+          if let EntityStates::Entity(ref_e, ref_k) = ref_entity {
+            if !e.compatible(ref_e) {
+              return Err(ValidationError::IncompatibleBot { index: i });
+            }
+            entities[i] -= *ref_k as i64;
+          }
+          entities[i] += *k as i64;
+          if entities[i] < 0 {
+            return Err(ValidationError::EntitiesDisappeared { index: i });
+          }
+        }
+      }
+    }
+    Ok(true)
+  }
 }
 
 #[derive(Debug)]
@@ -720,9 +766,19 @@ impl Ui for NewBF {
           },
           Some(Command::BotNumber(i, sign)) => match &mut self.state.entities[i] {
             EntityStates::Empty => {}
-            EntityStates::Entity(_, j) => match sign {
-              Sign::Minus => *j = j.saturating_sub(1),
-              Sign::Plus => *j += 1,
+            EntityStates::Entity(e, j) => match sign {
+              Sign::Minus => {
+                if *j > 0 {
+                  *j -= 1;
+                  self.state.materials += cost(&FullEntity::try_from(e.clone()).unwrap());
+                }
+              }
+              Sign::Plus => {
+                if self.state.materials >= cost(&FullEntity::try_from(e.clone()).unwrap()) {
+                  *j += 1;
+                  self.state.materials -= cost(&FullEntity::try_from(e.clone()).unwrap());
+                }
+              }
             },
           },
           Some(Command::BotBrush(i)) => self.brush = Brush::Bot(i),

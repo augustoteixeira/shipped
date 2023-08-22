@@ -10,8 +10,9 @@ UI
 --
 
 - finish squad functionality
-  - make new_bf an enum with "EditBot(i)" variant
-  - make edit_bot functionality
+  - subtract cost of bots
+  - finish validation of squads against level
+  - separate NewBFState and verification from ui
 - send view to ui crate
 - add initial screen and the necessary screens to get to view a game saved between two squads in json
 
