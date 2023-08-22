@@ -39,8 +39,10 @@ pub enum ValidationError {
   RemoveBotFromLevel { index: usize },
   #[snafu(display("Bot {:} needs to be compatible with level", index))]
   IncompatibleBot { index: usize },
-  #[snafu(display("Some entities {:} disapeared", index))]
-  EntitiesDisappeared { index: usize },
+  // #[snafu(display("Some entities {:} disapeared", index))]
+  // EntitiesDisappeared { index: usize },
+  #[snafu(display("Not enough material"))]
+  NotEnoughMaterialTotal {},
 }
 
 fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
@@ -131,48 +133,67 @@ pub struct NewBFState {
 }
 
 impl NewBFState {
-  pub fn cost(&self, new_bf_state: NewBFState) -> Materials {
-    let mut material_cost = Materials {
-      carbon: 0,
-      silicon: 0,
-      plutonium: 0,
-      copper: 0,
-    };
-    let mut entities: [i64; 4] = [0, 0, 0, 0];
+  pub fn entity_cost(&self, i: usize) -> Materials {
+    let entity = &self.entities[i];
+    match entity {
+      EntityStates::Empty => Materials {
+        carbon: 0,
+        silicon: 0,
+        plutonium: 0,
+        copper: 0,
+      },
+      EntityStates::Entity(e, k) => {
+        let mut num_entities = *k;
+        // loop through board, summing materials/entities
+        for pos in board_iterator() {
+          if pos.y >= HEIGHT / 2 {
+            let tile_entity = self.tiles[pos.to_index()].entity_id;
+            if tile_entity == Some(i) {
+              num_entities += 1;
+            }
+          }
+        }
+        let mut entities_cost = cost(&FullEntity::try_from(e.clone()).unwrap());
+        entities_cost.carbon *= num_entities;
+        entities_cost.silicon *= num_entities;
+        entities_cost.plutonium *= num_entities;
+        entities_cost.copper *= num_entities;
+        entities_cost
+      }
+    }
+  }
+
+  pub fn cost(&self) -> (Materials, usize, [usize; NUM_TEMPLATES]) {
+    let mut material_cost = self.materials.clone();
+    let mut entities: [usize; 4] = [0; NUM_TEMPLATES];
     // loop through board, summing materials/entities
     for pos in board_iterator() {
-      let tile_entity = self.tiles[pos.to_index()].entity_id;
-      if let Some(e) = tile_entity {
-        entities[e] += 1;
+      if pos.y >= HEIGHT / 2 {
+        let tile_entity = self.tiles[pos.to_index()].entity_id;
+        if let Some(e) = tile_entity {
+          entities[e] += 1;
+        }
+        let tile_material = &self.tiles[pos.to_index()].materials;
+        material_cost += tile_material.clone();
       }
-      let tile_material = &self.state.tiles[pos.to_index()].materials;
-      material_cost += tile_material.clone();
     }
     // loop through templates, summing entities costs
     for i in 0..NUM_TEMPLATES {
-      let new_entity = &self.state.entities[i];
-      let ref_entity = &reference.entities[i];
-      match new_entity {
-        EntityStates::Empty => {
-          if !matches!(ref_entity, EntityStates::Empty) {
-            return Err(ValidationError::RemoveBotFromLevel { index: i });
-          }
-        }
+      let entity = &self.entities[i];
+      match entity {
+        EntityStates::Empty => {}
         EntityStates::Entity(e, k) => {
-          if let EntityStates::Entity(ref_e, ref_k) = ref_entity {
-            if !e.compatible(ref_e) {
-              return Err(ValidationError::IncompatibleBot { index: i });
-            }
-            entities[i] -= *ref_k as i64;
-          }
-          entities[i] += *k as i64;
-          if entities[i] < 0 {
-            return Err(ValidationError::EntitiesDisappeared { index: i });
-          }
+          entities[i] += *k;
+          let mut entities_cost = cost(&FullEntity::try_from(e.clone()).unwrap());
+          entities_cost.carbon *= entities[i];
+          entities_cost.silicon *= entities[i];
+          entities_cost.plutonium *= entities[i];
+          entities_cost.copper *= entities[i];
+          material_cost += entities_cost;
         }
       }
     }
-    Ok(true)
+    (material_cost, 0, entities)
   }
 }
 
@@ -358,40 +379,35 @@ impl NewBF {
   }
 
   fn is_valid(&self) -> Result<bool, ValidationError> {
+    let new_cost = self.state.cost();
     match self.new_type.clone() {
       NewBFType::BrandNew => Ok(true),
       NewBFType::Derived(reference) => {
-        let mut extra_material = Materials {
-          carbon: 0,
-          silicon: 0,
-          plutonium: 0,
-          copper: 0,
-        };
-        let mut extra_entities: [i64; 4] = [0, 0, 0, 0];
-        // loop through board, verify deletions and summing materials/entities
+        // verify that costs match
+        let ref_cost = reference.cost();
+        if !(new_cost.0 <= ref_cost.0) {
+          println!("{:?} {:?}", new_cost.0, ref_cost.0);
+          return Err(ValidationError::NotEnoughMaterialTotal {});
+        }
+        for i in 0..NUM_TEMPLATES {
+          if new_cost.2[i] < ref_cost.2[i] {
+            return Err(ValidationError::RemoveBotFromLevel { index: i });
+          }
+        }
+        // loop through board, verify deletions
         for pos in board_iterator() {
           let ref_entity = reference.tiles[pos.to_index()].entity_id;
           let new_entity = self.state.tiles[pos.to_index()].entity_id;
-          match ref_entity {
-            Some(_) => {
-              if new_entity != ref_entity {
-                return Err(ValidationError::RemoveEntityFromLevel { pos });
-              }
-            }
-            None => {
-              if let Some(e) = new_entity {
-                extra_entities[e] += 1;
-              }
-            }
+          if ref_entity.is_some() & (new_entity != ref_entity) {
+            return Err(ValidationError::RemoveEntityFromLevel { pos });
           }
           let ref_mat = &reference.tiles[pos.to_index()].materials;
           let new_mat = &self.state.tiles[pos.to_index()].materials;
           if !(ref_mat <= new_mat) {
             return Err(ValidationError::RemoveMaterialFromLevel { pos });
           }
-          extra_material += new_mat.clone() - ref_mat.clone();
         }
-        // loop through templates, verifying bots and summing entities
+        // loop through templates, verifying bots
         for i in 0..NUM_TEMPLATES {
           let new_entity = &self.state.entities[i];
           let ref_entity = &reference.entities[i];
@@ -401,16 +417,11 @@ impl NewBF {
                 return Err(ValidationError::RemoveBotFromLevel { index: i });
               }
             }
-            EntityStates::Entity(e, k) => {
-              if let EntityStates::Entity(ref_e, ref_k) = ref_entity {
+            EntityStates::Entity(e, _) => {
+              if let EntityStates::Entity(ref_e, _) = ref_entity {
                 if !e.compatible(ref_e) {
                   return Err(ValidationError::IncompatibleBot { index: i });
                 }
-                extra_entities[i] -= *ref_k as i64;
-              }
-              extra_entities[i] += *k as i64;
-              if extra_entities[i] < 0 {
-                return Err(ValidationError::EntitiesDisappeared { index: i });
               }
             }
           }
@@ -845,10 +856,18 @@ impl Ui for NewBF {
           None
         }
         Some(EntityEditCommand::RequestChange(e)) => {
-          if let EntityStates::Entity(_, n) = self.state.entities[*index] {
-            self.state.entities[*index] = EntityStates::Entity(e.clone(), n);
-          }
           let i = *index;
+          if let EntityStates::Entity(_, n) = self.state.entities[i] {
+            self.state.entities[i] = EntityStates::Entity(e.clone(), n);
+            let new_entity_cost = self.state.entity_cost(i);
+            let old_entity_cost = self.old_state.entity_cost(i);
+            if new_entity_cost <= self.state.materials.clone() + old_entity_cost.clone() {
+              self.state.materials += old_entity_cost.clone();
+              self.state.materials -= new_entity_cost;
+            } else {
+              self.revert_from(&self.old_state.clone());
+            }
+          }
           self.update_main_panel();
           self.screen = Screen::Entity(
             EntityEdit::new(
