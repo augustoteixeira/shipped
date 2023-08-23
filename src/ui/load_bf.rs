@@ -150,11 +150,11 @@ impl Ui for LoadBF {
     match &self.state {
       LoadBFState::Showing(_, bf_state) => {
         draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
-        draw_mat_map(&bf_state.tiles, XDISPL, YDISPL, &self.tileset).await;
+        draw_mat_map(&bf_state.get_tiles(), XDISPL, YDISPL, &self.tileset).await;
         for pos in board_iterator() {
           if pos.y >= HEIGHT / 2 {
-            if let Some(id) = &bf_state.tiles[pos.to_index()].entity_id {
-              if let EntityState::Entity(e, _) = &bf_state.entities[*id] {
+            if let Some(id) = &bf_state.get_tiles()[pos.to_index()].entity_id {
+              if let EntityState::Entity(e, _) = &bf_state.get_entities()[*id] {
                 draw_entity(
                   Some(&e.clone().try_into().unwrap()),
                   XDISPL,

@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use snafu::prelude::*;
 
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
-use crate::state::entity::{cost, FullEntity, MixEntity};
+use crate::state::entity::{cost, FullEntity, Mix, MixEntity, MovementType, Team};
 use crate::state::geometry::{board_iterator, Pos};
 use crate::state::materials::Materials;
 use crate::state::state::Tile;
@@ -29,8 +29,8 @@ pub struct BFState {
   materials: Materials,
   tokens: usize,
   min_tokens: usize,
-  pub tiles: Vec<Tile>,
-  pub entities: [EntityState; NUM_TEMPLATES],
+  tiles: Vec<Tile>,
+  entities: [EntityState; NUM_TEMPLATES],
 }
 
 #[derive(Debug, Snafu)]
@@ -51,6 +51,14 @@ pub enum ValidationError {
 
 #[derive(Debug, Snafu)]
 pub enum UpdateError {
+  #[snafu(display("Tile {:?} is empty", pos))]
+  EmptyTile { pos: Pos },
+  #[snafu(display("Tile {:?} is occupied", pos))]
+  TileOccupied { pos: Pos },
+  #[snafu(display("No bots of type {:} owned", index))]
+  NoBotsOwned { index: usize },
+  #[snafu(display("Cannot add empty bot {:}", index))]
+  CannotAddEmptyBot { index: usize },
   #[snafu(display("Not enough material to guarantee remainder"))]
   NotEnoughMaterialRemainder {},
   #[snafu(display("Not enough material {:?} to cover {:}", mat_name, amount))]
@@ -61,17 +69,27 @@ pub enum UpdateError {
   NotEnoughMinTokens { min_tokens: usize, remove: usize },
   #[snafu(display("Cannot sell empty bot {:}", index))]
   CannotSellEmptyBot { index: usize },
-  #[snafu(display("Cannot buy empty bot {:}", index))]
-  CannotBuyEmptyBot { index: usize },
+  #[snafu(display("Empty bot {:}", index))]
+  EmptyBot { index: usize },
   #[snafu(display("Cannot sell with no bots of type {:}", index))]
   CannotSellWithZeroBot { index: usize },
   #[snafu(display("Not enough material to buy bot {:}", index))]
   NoMaterialToBuyBot { index: usize },
   #[snafu(display("Not enough tokens to buy bot {:}", index))]
   NoTokensToBuyBot { index: usize },
+  #[snafu(display("Cannot initialize non-empty bot {:}", index))]
+  InitTwice { index: usize },
 }
 
 impl BFState {
+  pub fn get_tiles(&self) -> &Vec<Tile> {
+    &self.tiles
+  }
+
+  pub fn get_entities(&self) -> &[EntityState; NUM_TEMPLATES] {
+    &self.entities
+  }
+
   pub fn get_materials(&self) -> Materials {
     self.materials.clone()
   }
@@ -118,6 +136,89 @@ impl BFState {
     let removal = tile.materials.clone() - remainder.clone();
     self.materials += removal;
     tile.materials = remainder;
+    Ok(())
+  }
+
+  pub fn add_bot_board(&mut self, bot_index: usize, pos: Pos) -> Result<(), UpdateError> {
+    match &mut self.entities[bot_index] {
+      EntityState::Empty => {
+        return Err(UpdateError::CannotAddEmptyBot { index: bot_index });
+      }
+      EntityState::Entity(_, k) => {
+        if *k == 0 {
+          return Err(UpdateError::NoBotsOwned { index: bot_index });
+        } else {
+          if self.tiles[pos.to_index()].entity_id.is_some() {
+            return Err(UpdateError::TileOccupied { pos });
+          } else {
+            *k -= 1;
+            self.tiles[pos.to_index()].entity_id = Some(bot_index);
+          }
+        }
+      }
+    }
+    Ok(())
+  }
+
+  pub fn delete_bot(&mut self, index: usize) {
+    self.entities[index] = EntityState::Empty;
+  }
+
+  pub fn initialize_bot(&mut self, index: usize) -> Result<(), UpdateError> {
+    if let EntityState::Empty = self.entities[index] {
+      self.entities[index] = EntityState::Entity(
+        MixEntity {
+          tokens: 0,
+          team: Team::Blue,
+          pos: Pos::new(0, 0),
+          hp: 1,
+          inventory_size: 0,
+          materials: Materials {
+            carbon: 0,
+            silicon: 0,
+            plutonium: 0,
+            copper: 0,
+          },
+          movement_type: MovementType::Still,
+          gun_damage: 0,
+          drill_damage: 0,
+          message: None,
+          brain: Mix::Bare,
+        },
+        0,
+      )
+    } else {
+      return Err(UpdateError::InitTwice { index });
+    }
+    Ok(())
+  }
+
+  pub fn update_bot(&mut self, index: usize, entity: MixEntity) -> Result<(), UpdateError> {
+    match &mut self.entities[index] {
+      EntityState::Empty => {
+        return Err(UpdateError::EmptyBot { index });
+      }
+      EntityState::Entity(e, _) => {
+        *e = entity;
+        return Ok(());
+      }
+    }
+  }
+
+  pub fn erase_bot_from_board(&mut self, pos: Pos) -> Result<(), UpdateError> {
+    let tile = &mut self.tiles[pos.to_index()];
+    match &mut tile.entity_id {
+      None => {
+        return Err(UpdateError::EmptyTile { pos });
+      }
+      Some(i) => match &mut self.entities[*i] {
+        EntityState::Empty => return Err(UpdateError::EmptyBot { index: *i }),
+        EntityState::Entity(_, k) => {
+          *k += 1;
+          tile.entity_id = None;
+        }
+      },
+    }
     Ok(())
   }
 
@@ -205,7 +306,7 @@ impl BFState {
   pub fn buy_bot(&mut self, index: usize) -> Result<(), UpdateError> {
     match &mut self.entities[index] {
       EntityState::Empty => {
-        return Err(UpdateError::CannotBuyEmptyBot { index });
+        return Err(UpdateError::EmptyBot { index });
       }
       EntityState::Entity(e, j) => {
         if !(self.materials >= cost(&FullEntity::try_from(e.clone()).unwrap())) {

@@ -15,7 +15,7 @@ use super::entity_edit::{EntityEdit, EntityEditCommand};
 use super::ui::{build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect, Ui};
 use crate::state::bf::{BFState, EntityState, MatName, ValidationError};
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
-use crate::state::entity::{Mix, MixEntity, MovementType, Team};
+use crate::state::entity::Team;
 use crate::state::geometry::{board_iterator, Pos};
 use crate::state::materials::Materials;
 use crate::state::utils::get_next_file_number;
@@ -202,7 +202,7 @@ impl NewBF {
   fn build_single_bot_panel(&self, rect: &Rect, index: usize) -> ButtonPanel<Command> {
     let rects: Vec<Rect> = split(rect, vec![0.0, 1.0], vec![0.0, 0.4, 0.6, 0.8, 1.0]);
     let mut panel = ButtonPanel::new(rect.clone(), (vec![], vec![], vec![], vec![], vec![]));
-    match &self.state.entities[index] {
+    match &self.state.get_entities()[index] {
       // return with New button if entity is empty
       EntityState::Empty => {
         panel.push(Button::<Command>::new(
@@ -388,12 +388,12 @@ impl Ui for NewBF {
     self.panel.draw().await;
     draw_text(&self.message, 20.0, 40.0, 40.0, DARKBLUE);
     draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
-    draw_mat_map(&self.state.tiles, XDISPL, YDISPL, &self.tileset).await;
+    draw_mat_map(&self.state.get_tiles(), XDISPL, YDISPL, &self.tileset).await;
     draw_rectangle(XDISPL, YDISPL, 16.0 * 60.0, 16.0 * 30.0, SMOKE);
     for pos in board_iterator() {
       if pos.y >= HEIGHT / 2 {
-        if let Some(id) = &self.state.tiles[pos.to_index()].entity_id {
-          if let EntityState::Entity(e, _) = &self.state.entities[*id] {
+        if let Some(id) = &self.state.get_tiles()[pos.to_index()].entity_id {
+          if let EntityState::Entity(e, _) = &self.state.get_entities()[*id] {
             draw_entity(
               Some(&e.clone().try_into().unwrap()),
               XDISPL,
@@ -524,21 +524,14 @@ impl Ui for NewBF {
               };
             }
             Brush::Bot(i) => {
-              if let EntityState::Entity(_, k) = &mut self.state.entities[i] {
-                if *k > 0 && self.state.tiles[pos.to_index()].entity_id.is_none() {
-                  *k -= 1;
-                  self.state.tiles[pos.to_index()].entity_id = Some(i);
-                }
+              if let Err(e) = self.state.add_bot_board(i, pos) {
+                self.message = format!("{}", e);
               }
             }
             Brush::Eraser => match &self.new_type {
               NewBFType::BrandNew => {
-                let tile = &mut self.state.tiles[pos.to_index()];
-                if let Some(i) = &mut tile.entity_id {
-                  if let EntityState::Entity(_, k) = &mut self.state.entities[*i] {
-                    *k += 1;
-                  }
-                  tile.entity_id = None;
+                if let Err(e) = self.state.erase_bot_from_board(pos) {
+                  self.message = format!("{}", e);
                 }
                 let remainder = Materials {
                   carbon: 0,
@@ -551,14 +544,12 @@ impl Ui for NewBF {
                 };
               }
               NewBFType::Derived(reference) => {
-                let tile = &mut self.state.tiles[pos.to_index()];
-                let ref_tile = &reference.tiles[pos.to_index()];
-                if let Some(i) = &mut tile.entity_id {
-                  if ref_tile.entity_id.is_none() {
-                    if let EntityState::Entity(_, k) = &mut self.state.entities[*i] {
-                      *k += 1;
-                    }
-                    tile.entity_id = None;
+                let ref_tile = &reference.get_tiles()[pos.to_index()];
+                if ref_tile.entity_id.is_some() {
+                  self.message = format!("Cannot remove level bot {:?}", pos);
+                } else {
+                  if let Err(e) = self.state.erase_bot_from_board(pos) {
+                    self.message = format!("{}", e);
                   }
                 }
                 let remainder = ref_tile.materials.clone();
@@ -568,7 +559,7 @@ impl Ui for NewBF {
               }
             },
           },
-          Some(Command::BotNumber(i, sign)) => match &mut self.state.entities[i] {
+          Some(Command::BotNumber(i, sign)) => match &self.state.get_entities()[i] {
             EntityState::Empty => {}
             EntityState::Entity(_, _) => match sign {
               Sign::Minus => {
@@ -584,42 +575,22 @@ impl Ui for NewBF {
             },
           },
           Some(Command::BotBrush(i)) => self.brush = Brush::Bot(i),
-          Some(Command::BotEdit(i)) => match &self.state.entities[i] {
+          Some(Command::BotEdit(i)) => match &self.state.get_entities()[i] {
             EntityState::Empty => {
-              self.state.entities[i] = EntityState::Entity(
-                MixEntity {
-                  tokens: 0,
-                  team: Team::Blue,
-                  pos: Pos::new(0, 0),
-                  hp: 1,
-                  inventory_size: 0,
-                  materials: Materials {
-                    carbon: 0,
-                    silicon: 0,
-                    plutonium: 0,
-                    copper: 0,
-                  },
-                  movement_type: MovementType::Still,
-                  gun_damage: 0,
-                  drill_damage: 0,
-                  message: None,
-                  brain: Mix::Bare,
-                },
-                0,
-              )
+              self.state.initialize_bot(i).unwrap();
             }
             _ => {
               self.screen = Screen::Entity(
                 EntityEdit::new(
                   trim_margins(self.rect.clone(), 0.15, 0.15, 0.15, 0.15),
-                  self.state.entities[i].clone(),
+                  self.state.get_entities()[i].clone(),
                 ),
                 i,
               );
             }
           },
           Some(Command::BotAddSubs(_)) => {}
-          Some(Command::BotDelete(i)) => self.state.entities[i] = EntityState::Empty,
+          Some(Command::BotDelete(i)) => self.state.delete_bot(i),
           Some(Command::Finish) => {
             self.screen = Screen::SaveDialogue(self.build_finish_dialogue());
             return None;
@@ -639,8 +610,8 @@ impl Ui for NewBF {
       }
       Screen::Entity(ee, index) => match &mut ee.process_input(input) {
         Some(EntityEditCommand::Exit(e)) => {
-          if let EntityState::Entity(_, n) = self.state.entities[*index] {
-            self.state.entities[*index] = EntityState::Entity(e.clone(), n);
+          if let Err(e) = self.state.update_bot(*index, e.clone()) {
+            self.message = format!("{}", e);
           }
           self.screen = Screen::Map;
           self.update_main_panel();
@@ -648,8 +619,10 @@ impl Ui for NewBF {
         }
         Some(EntityEditCommand::RequestChange(e)) => {
           let i = *index;
-          if let EntityState::Entity(_, n) = self.state.entities[i] {
-            self.state.entities[i] = EntityState::Entity(e.clone(), n);
+          if let EntityState::Entity(_, _) = self.state.get_entities()[i] {
+            if let Err(e) = self.state.update_bot(*index, e.clone()) {
+              self.message = format!("{}", e);
+            }
             let new_entity_cost = self.state.entity_cost(i);
             let old_entity_cost = self.old_state.entity_cost(i);
             // check material cost
@@ -675,7 +648,7 @@ impl Ui for NewBF {
           self.screen = Screen::Entity(
             EntityEdit::new(
               trim_margins(self.rect.clone(), 0.15, 0.15, 0.15, 0.15),
-              self.state.entities[i].clone(),
+              self.state.get_entities()[i].clone(),
             ),
             i,
           );
