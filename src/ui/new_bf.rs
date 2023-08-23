@@ -43,6 +43,8 @@ pub enum ValidationError {
   // EntitiesDisappeared { index: usize },
   #[snafu(display("Not enough material"))]
   NotEnoughMaterialTotal {},
+  #[snafu(display("Not enough tokens"))]
+  NotEnoughMaterialTokens {},
 }
 
 fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
@@ -133,15 +135,18 @@ pub struct NewBFState {
 }
 
 impl NewBFState {
-  pub fn entity_cost(&self, i: usize) -> Materials {
+  pub fn entity_cost(&self, i: usize) -> (Materials, usize) {
     let entity = &self.entities[i];
     match entity {
-      EntityStates::Empty => Materials {
-        carbon: 0,
-        silicon: 0,
-        plutonium: 0,
-        copper: 0,
-      },
+      EntityStates::Empty => (
+        Materials {
+          carbon: 0,
+          silicon: 0,
+          plutonium: 0,
+          copper: 0,
+        },
+        0,
+      ),
       EntityStates::Entity(e, k) => {
         let mut num_entities = *k;
         // loop through board, summing materials/entities
@@ -158,7 +163,7 @@ impl NewBFState {
         entities_cost.silicon *= num_entities;
         entities_cost.plutonium *= num_entities;
         entities_cost.copper *= num_entities;
-        entities_cost
+        (entities_cost, e.tokens * num_entities)
       }
     }
   }
@@ -166,6 +171,7 @@ impl NewBFState {
   pub fn cost(&self) -> (Materials, usize, [usize; NUM_TEMPLATES]) {
     let mut material_cost = self.materials.clone();
     let mut entities: [usize; 4] = [0; NUM_TEMPLATES];
+    let mut tokens = self.tokens;
     // loop through board, summing materials/entities
     for pos in board_iterator() {
       if pos.y >= HEIGHT / 2 {
@@ -190,10 +196,11 @@ impl NewBFState {
           entities_cost.plutonium *= entities[i];
           entities_cost.copper *= entities[i];
           material_cost += entities_cost;
+          tokens += e.tokens * entities[i];
         }
       }
     }
-    (material_cost, 0, entities)
+    (material_cost, tokens, entities)
   }
 }
 
@@ -353,7 +360,7 @@ impl NewBF {
           (
             "Use".to_string(),
             Command::BotBrush(index),
-            true,
+            true, // TODO make it inactive if there are no bots to use
             (matches!(&self.brush, Brush::Bot(i) if index == *i)),
           ),
         ));
@@ -386,8 +393,10 @@ impl NewBF {
         // verify that costs match
         let ref_cost = reference.cost();
         if !(new_cost.0 <= ref_cost.0) {
-          println!("{:?} {:?}", new_cost.0, ref_cost.0);
           return Err(ValidationError::NotEnoughMaterialTotal {});
+        }
+        if new_cost.1 > ref_cost.1 {
+          return Err(ValidationError::NotEnoughMaterialTokens {});
         }
         for i in 0..NUM_TEMPLATES {
           if new_cost.2[i] < ref_cost.2[i] {
@@ -782,12 +791,16 @@ impl Ui for NewBF {
                 if *j > 0 {
                   *j -= 1;
                   self.state.materials += cost(&FullEntity::try_from(e.clone()).unwrap());
+                  self.state.tokens += e.tokens;
                 }
               }
               Sign::Plus => {
                 if self.state.materials >= cost(&FullEntity::try_from(e.clone()).unwrap()) {
-                  *j += 1;
-                  self.state.materials -= cost(&FullEntity::try_from(e.clone()).unwrap());
+                  if self.state.tokens >= e.tokens {
+                    *j += 1;
+                    self.state.materials -= cost(&FullEntity::try_from(e.clone()).unwrap());
+                    self.state.tokens -= e.tokens;
+                  }
                 }
               }
             },
@@ -861,9 +874,17 @@ impl Ui for NewBF {
             self.state.entities[i] = EntityStates::Entity(e.clone(), n);
             let new_entity_cost = self.state.entity_cost(i);
             let old_entity_cost = self.old_state.entity_cost(i);
-            if new_entity_cost <= self.state.materials.clone() + old_entity_cost.clone() {
-              self.state.materials += old_entity_cost.clone();
-              self.state.materials -= new_entity_cost;
+            // check material cost
+            if new_entity_cost.0 <= self.state.materials.clone() + old_entity_cost.0.clone() {
+              self.state.materials += old_entity_cost.0.clone();
+              self.state.materials -= new_entity_cost.0;
+            } else {
+              self.revert_from(&self.old_state.clone());
+            }
+            // check token cost
+            if new_entity_cost.1 <= self.state.tokens + old_entity_cost.1 {
+              self.state.tokens += old_entity_cost.1;
+              self.state.tokens -= new_entity_cost.1;
             } else {
               self.revert_from(&self.old_state.clone());
             }
