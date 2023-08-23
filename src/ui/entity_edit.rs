@@ -5,10 +5,10 @@ use std::cmp::{max, min};
 use async_trait::async_trait;
 use macroquad::prelude::*;
 
-use super::new_bf::EntityStates;
 use super::ui::{
   build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
 };
+use crate::state::bf::EntityState;
 use crate::state::constants::NUM_TEMPLATES;
 use crate::state::entity::{Full, Mix, MixEntity, MovementType};
 
@@ -47,8 +47,8 @@ pub enum Command {
 
 #[derive(Clone, Debug)]
 pub struct EntityEdit {
-  pub entity: EntityStates,
-  old_entity: EntityStates,
+  pub entity: EntityState,
+  old_entity: EntityState,
   rect: Rect,
   panel: ButtonPanel<Command>,
 }
@@ -61,8 +61,8 @@ impl EntityEdit {
   }
   fn is_valid(&self) -> bool {
     match &self.entity {
-      EntityStates::Empty => {}
-      EntityStates::Entity(e, _) => {
+      EntityState::Empty => {}
+      EntityState::Entity(e, _) => {
         let load =
           e.materials.carbon + e.materials.silicon + e.materials.plutonium + e.materials.copper;
         if load > e.inventory_size {
@@ -87,8 +87,8 @@ impl EntityEdit {
       ("Exit".to_string(), Command::Exit, true, false),
     ));
     match &self.entity {
-      EntityStates::Empty => unreachable!(),
-      EntityStates::Entity(e, _) => {
+      EntityState::Empty => unreachable!(),
+      EntityState::Entity(e, _) => {
         let first_row_rects: Vec<Rect> =
           split(&rects[0], vec![0.0, 0.25, 0.5, 0.75, 1.0], vec![0.0, 1.0])
             .into_iter()
@@ -257,9 +257,9 @@ impl EntityEdit {
 #[async_trait]
 impl Ui for EntityEdit {
   type Command = EntityEditCommand;
-  type Builder = EntityStates;
+  type Builder = EntityState;
 
-  fn new(rect: Rect, e: EntityStates) -> Self {
+  fn new(rect: Rect, e: EntityState) -> Self {
     let panel = ButtonPanel::new(rect.clone(), (vec![], vec![], vec![], vec![], vec![]));
     let mut ee = EntityEdit {
       rect,
@@ -279,18 +279,18 @@ impl Ui for EntityEdit {
   fn process_input(&mut self, input: Input) -> Option<EntityEditCommand> {
     let command = self.panel.process_input(input.clone());
     if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) = input {
-      if let EntityStates::Entity(e, _) = &self.entity {
+      if let EntityState::Entity(e, _) = &self.entity {
         return Some(EntityEditCommand::Exit(e.clone()));
       }
     }
     match command {
       Some(Command::Exit) => {
-        if let EntityStates::Entity(e, _) = &self.entity {
+        if let EntityState::Entity(e, _) = &self.entity {
           return Some(EntityEditCommand::Exit(e.clone()));
         }
       }
       Some(Command::PM(attribute, sign)) => {
-        if let EntityStates::Entity(mix, _) = &mut self.entity {
+        if let EntityState::Entity(mix, _) = &mut self.entity {
           match attribute {
             Attribute::Token => {
               mix.tokens = plus_minus(mix.tokens, sign);
@@ -348,7 +348,7 @@ impl Ui for EntityEdit {
       }
       None => {}
       Some(Command::AddAttribute) => {
-        if let EntityStates::Entity(mix, _) = &mut self.entity {
+        if let EntityState::Entity(mix, _) = &mut self.entity {
           mix.movement_type = MovementType::Still;
           mix.gun_damage = 0;
           mix.drill_damage = 0;
@@ -357,12 +357,12 @@ impl Ui for EntityEdit {
         }
       }
       Some(Command::AddConstructs) => {
-        if let EntityStates::Entity(mix, _) = &mut self.entity {
+        if let EntityState::Entity(mix, _) = &mut self.entity {
           mix.brain = Mix::Half([0, 0]);
         }
       }
       Some(Command::AddCode) => {
-        if let EntityStates::Entity(mix, _) = &mut self.entity {
+        if let EntityState::Entity(mix, _) = &mut self.entity {
           if let Mix::Half(h) = mix.brain {
             mix.brain = Mix::Full(Full {
               half: h.clone(),
@@ -374,7 +374,7 @@ impl Ui for EntityEdit {
       }
     }
     self.update_main_panel();
-    if let EntityStates::Entity(e, _) = &self.entity {
+    if let EntityState::Entity(e, _) = &self.entity {
       return Some(EntityEditCommand::RequestChange(e.clone()));
     } else {
       return None;

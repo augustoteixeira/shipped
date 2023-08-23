@@ -6,7 +6,6 @@ use futures::executor::block_on;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-use serde::{Deserialize, Serialize};
 use snafu::prelude::*;
 use std::fs::File;
 use std::io::Write;
@@ -15,6 +14,7 @@ use std::path::Path;
 use super::canvas::{draw_entity, draw_floor, draw_mat_map};
 use super::entity_edit::{EntityEdit, EntityEditCommand};
 use super::ui::{build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect, Ui};
+use crate::state::bf::{BFState, EntityState};
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{cost, FullEntity, Mix, MixEntity, MovementType, Team};
 use crate::state::geometry::{board_iterator, Pos};
@@ -39,20 +39,18 @@ pub enum ValidationError {
   RemoveBotFromLevel { index: usize },
   #[snafu(display("Bot {:} needs to be compatible with level", index))]
   IncompatibleBot { index: usize },
-  // #[snafu(display("Some entities {:} disapeared", index))]
-  // EntitiesDisappeared { index: usize },
   #[snafu(display("Not enough material"))]
   NotEnoughMaterialTotal {},
   #[snafu(display("Not enough tokens"))]
   NotEnoughMaterialTokens {},
 }
 
-fn construct_entities() -> [EntityStates; NUM_TEMPLATES] {
+fn construct_entities() -> [EntityState; NUM_TEMPLATES] {
   [
-    EntityStates::Empty,
-    EntityStates::Empty,
-    EntityStates::Empty,
-    EntityStates::Empty,
+    EntityState::Empty,
+    EntityState::Empty,
+    EntityState::Empty,
+    EntityState::Empty,
   ]
 }
 
@@ -105,12 +103,6 @@ pub enum Command {
   Exit,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum EntityStates {
-  Empty,
-  Entity(MixEntity, usize),
-}
-
 #[derive(Clone, Debug)]
 enum Screen {
   Map,
@@ -122,92 +114,13 @@ enum Screen {
 #[derive(Clone, Debug)]
 pub enum NewBFType {
   BrandNew,
-  Derived(NewBFState),
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct NewBFState {
-  pub materials: Materials,
-  pub tokens: usize,
-  pub min_tokens: usize,
-  pub tiles: Vec<Tile>,
-  pub entities: [EntityStates; NUM_TEMPLATES],
-}
-
-impl NewBFState {
-  pub fn entity_cost(&self, i: usize) -> (Materials, usize) {
-    let entity = &self.entities[i];
-    match entity {
-      EntityStates::Empty => (
-        Materials {
-          carbon: 0,
-          silicon: 0,
-          plutonium: 0,
-          copper: 0,
-        },
-        0,
-      ),
-      EntityStates::Entity(e, k) => {
-        let mut num_entities = *k;
-        // loop through board, summing materials/entities
-        for pos in board_iterator() {
-          if pos.y >= HEIGHT / 2 {
-            let tile_entity = self.tiles[pos.to_index()].entity_id;
-            if tile_entity == Some(i) {
-              num_entities += 1;
-            }
-          }
-        }
-        let mut entities_cost = cost(&FullEntity::try_from(e.clone()).unwrap());
-        entities_cost.carbon *= num_entities;
-        entities_cost.silicon *= num_entities;
-        entities_cost.plutonium *= num_entities;
-        entities_cost.copper *= num_entities;
-        (entities_cost, e.tokens * num_entities)
-      }
-    }
-  }
-
-  pub fn cost(&self) -> (Materials, usize, [usize; NUM_TEMPLATES]) {
-    let mut material_cost = self.materials.clone();
-    let mut entities: [usize; 4] = [0; NUM_TEMPLATES];
-    let mut tokens = self.tokens;
-    // loop through board, summing materials/entities
-    for pos in board_iterator() {
-      if pos.y >= HEIGHT / 2 {
-        let tile_entity = self.tiles[pos.to_index()].entity_id;
-        if let Some(e) = tile_entity {
-          entities[e] += 1;
-        }
-        let tile_material = &self.tiles[pos.to_index()].materials;
-        material_cost += tile_material.clone();
-      }
-    }
-    // loop through templates, summing entities costs
-    for i in 0..NUM_TEMPLATES {
-      let entity = &self.entities[i];
-      match entity {
-        EntityStates::Empty => {}
-        EntityStates::Entity(e, k) => {
-          entities[i] += *k;
-          let mut entities_cost = cost(&FullEntity::try_from(e.clone()).unwrap());
-          entities_cost.carbon *= entities[i];
-          entities_cost.silicon *= entities[i];
-          entities_cost.plutonium *= entities[i];
-          entities_cost.copper *= entities[i];
-          material_cost += entities_cost;
-          tokens += e.tokens * entities[i];
-        }
-      }
-    }
-    (material_cost, tokens, entities)
-  }
+  Derived(BFState),
 }
 
 #[derive(Debug)]
 pub struct NewBF {
-  state: NewBFState,
-  old_state: NewBFState,
+  state: BFState,
+  old_state: BFState,
   message: String,
   brush: Brush,
   screen: Screen,
@@ -328,14 +241,14 @@ impl NewBF {
     let mut panel = ButtonPanel::new(rect.clone(), (vec![], vec![], vec![], vec![], vec![]));
     match &self.state.entities[index] {
       // return with New button if entity is empty
-      EntityStates::Empty => {
+      EntityState::Empty => {
         panel.push(Button::<Command>::new(
           rect.clone(),
           ("New".to_string(), Command::BotEdit(index), true, false),
         ));
         return panel;
       }
-      EntityStates::Entity(_, number) => {
+      EntityState::Entity(_, number) => {
         panel.append(&mut build_incrementer::<Command>(
           &rects[0],
           format!("Bot {}", index).to_string(),
@@ -370,7 +283,7 @@ impl NewBF {
     panel
   }
 
-  fn revert_from(&mut self, nf: &NewBFState) {
+  fn revert_from(&mut self, nf: &BFState) {
     self.state = nf.clone();
   }
 
@@ -421,13 +334,13 @@ impl NewBF {
           let new_entity = &self.state.entities[i];
           let ref_entity = &reference.entities[i];
           match new_entity {
-            EntityStates::Empty => {
-              if !matches!(ref_entity, EntityStates::Empty) {
+            EntityState::Empty => {
+              if !matches!(ref_entity, EntityState::Empty) {
                 return Err(ValidationError::RemoveBotFromLevel { index: i });
               }
             }
-            EntityStates::Entity(e, _) => {
-              if let EntityStates::Entity(ref_e, _) = ref_entity {
+            EntityState::Entity(e, _) => {
+              if let EntityState::Entity(ref_e, _) = ref_entity {
                 if !e.compatible(ref_e) {
                   return Err(ValidationError::IncompatibleBot { index: i });
                 }
@@ -523,9 +436,9 @@ impl NewBF {
 #[async_trait]
 impl Ui for NewBF {
   type Command = ();
-  type Builder = Option<NewBFState>;
+  type Builder = Option<BFState>;
 
-  fn new(rect: Rect, builder: Option<NewBFState>) -> Self {
+  fn new(rect: Rect, builder: Option<BFState>) -> Self {
     let tileset = block_on(load_texture("assets/tileset.png")).unwrap();
     let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(25).try_into().unwrap();
     let mut floor = [0; WIDTH * HEIGHT];
@@ -533,7 +446,7 @@ impl Ui for NewBF {
       floor[i] = rng.gen_range(0..7);
     }
     let new_bf_state = match &builder {
-      None => NewBFState {
+      None => BFState {
         materials: Materials {
           carbon: 0,
           silicon: 0,
@@ -585,7 +498,7 @@ impl Ui for NewBF {
     for pos in board_iterator() {
       if pos.y >= HEIGHT / 2 {
         if let Some(id) = &self.state.tiles[pos.to_index()].entity_id {
-          if let EntityStates::Entity(e, _) = &self.state.entities[*id] {
+          if let EntityState::Entity(e, _) = &self.state.entities[*id] {
             draw_entity(
               Some(&e.clone().try_into().unwrap()),
               XDISPL,
@@ -744,7 +657,7 @@ impl Ui for NewBF {
               }
             }
             Brush::Bot(i) => {
-              if let EntityStates::Entity(_, k) = &mut self.state.entities[i] {
+              if let EntityState::Entity(_, k) = &mut self.state.entities[i] {
                 if *k > 0 && self.state.tiles[pos.to_index()].entity_id.is_none() {
                   *k -= 1;
                   self.state.tiles[pos.to_index()].entity_id = Some(i);
@@ -755,7 +668,7 @@ impl Ui for NewBF {
               NewBFType::BrandNew => {
                 let tile = &mut self.state.tiles[pos.to_index()];
                 if let Some(i) = &mut tile.entity_id {
-                  if let EntityStates::Entity(_, k) = &mut self.state.entities[*i] {
+                  if let EntityState::Entity(_, k) = &mut self.state.entities[*i] {
                     *k += 1;
                   }
                   tile.entity_id = None;
@@ -771,7 +684,7 @@ impl Ui for NewBF {
                 let ref_tile = &reference.tiles[pos.to_index()];
                 if let Some(i) = &mut tile.entity_id {
                   if ref_tile.entity_id.is_none() {
-                    if let EntityStates::Entity(_, k) = &mut self.state.entities[*i] {
+                    if let EntityState::Entity(_, k) = &mut self.state.entities[*i] {
                       *k += 1;
                     }
                     tile.entity_id = None;
@@ -785,8 +698,8 @@ impl Ui for NewBF {
             },
           },
           Some(Command::BotNumber(i, sign)) => match &mut self.state.entities[i] {
-            EntityStates::Empty => {}
-            EntityStates::Entity(e, j) => match sign {
+            EntityState::Empty => {}
+            EntityState::Entity(e, j) => match sign {
               Sign::Minus => {
                 if *j > 0 {
                   *j -= 1;
@@ -807,8 +720,8 @@ impl Ui for NewBF {
           },
           Some(Command::BotBrush(i)) => self.brush = Brush::Bot(i),
           Some(Command::BotEdit(i)) => match &self.state.entities[i] {
-            EntityStates::Empty => {
-              self.state.entities[i] = EntityStates::Entity(
+            EntityState::Empty => {
+              self.state.entities[i] = EntityState::Entity(
                 MixEntity {
                   tokens: 0,
                   team: Team::Blue,
@@ -841,7 +754,7 @@ impl Ui for NewBF {
             }
           },
           Some(Command::BotAddSubs(_)) => {}
-          Some(Command::BotDelete(i)) => self.state.entities[i] = EntityStates::Empty,
+          Some(Command::BotDelete(i)) => self.state.entities[i] = EntityState::Empty,
           Some(Command::Finish) => {
             self.screen = Screen::SaveDialogue(self.build_finish_dialogue());
             return None;
@@ -861,8 +774,8 @@ impl Ui for NewBF {
       }
       Screen::Entity(ee, index) => match &mut ee.process_input(input) {
         Some(EntityEditCommand::Exit(e)) => {
-          if let EntityStates::Entity(_, n) = self.state.entities[*index] {
-            self.state.entities[*index] = EntityStates::Entity(e.clone(), n);
+          if let EntityState::Entity(_, n) = self.state.entities[*index] {
+            self.state.entities[*index] = EntityState::Entity(e.clone(), n);
           }
           self.screen = Screen::Map;
           self.update_main_panel();
@@ -870,8 +783,8 @@ impl Ui for NewBF {
         }
         Some(EntityEditCommand::RequestChange(e)) => {
           let i = *index;
-          if let EntityStates::Entity(_, n) = self.state.entities[i] {
-            self.state.entities[i] = EntityStates::Entity(e.clone(), n);
+          if let EntityState::Entity(_, n) = self.state.entities[i] {
+            self.state.entities[i] = EntityState::Entity(e.clone(), n);
             let new_entity_cost = self.state.entity_cost(i);
             let old_entity_cost = self.old_state.entity_cost(i);
             // check material cost

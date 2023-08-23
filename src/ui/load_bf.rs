@@ -14,10 +14,11 @@ use std::io::Read;
 
 use super::canvas::{draw_entity, draw_floor, draw_mat_map};
 //use super::entity_edit::{EntityEdit, EntityEditCommand};
-use super::new_bf::{EntityStates, NewBF, NewBFState};
+use super::new_bf::NewBF;
 use super::ui::{
   build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
 };
+use crate::state::bf::{BFState, EntityState};
 use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::Team;
 //use crate::state::entity::{Mix, MixEntity, MovementType, Team};
@@ -39,7 +40,7 @@ pub enum Command {
 #[derive(Debug)]
 pub enum LoadBFState {
   NoFiles,
-  Showing(usize, NewBFState),
+  Showing(usize, BFState),
   NewSquad(NewBF),
 }
 
@@ -102,7 +103,7 @@ impl LoadBF {
     self.panel = self.build_panel(&rects[0]);
   }
 
-  fn load_file(n: usize) -> Option<NewBFState> {
+  fn load_file(n: usize) -> Option<BFState> {
     let path = Path::new("./levels");
     let dest_filename = format!("{:05}", n);
     let mut dest = path.join(dest_filename);
@@ -153,7 +154,7 @@ impl Ui for LoadBF {
         for pos in board_iterator() {
           if pos.y >= HEIGHT / 2 {
             if let Some(id) = &bf_state.tiles[pos.to_index()].entity_id {
-              if let EntityStates::Entity(e, _) = &bf_state.entities[*id] {
+              if let EntityState::Entity(e, _) = &bf_state.entities[*id] {
                 draw_entity(
                   Some(&e.clone().try_into().unwrap()),
                   XDISPL,
