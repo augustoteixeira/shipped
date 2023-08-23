@@ -10,6 +10,14 @@ use crate::state::geometry::{board_iterator, Pos};
 use crate::state::materials::Materials;
 use crate::state::state::Tile;
 
+#[derive(Clone, Debug)]
+pub enum MatName {
+  Carbon,
+  Silicon,
+  Plutonium,
+  Copper,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EntityState {
   Empty,
@@ -18,9 +26,9 @@ pub enum EntityState {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BFState {
-  pub materials: Materials,
+  materials: Materials,
   tokens: usize,
-  pub min_tokens: usize,
+  min_tokens: usize,
   pub tiles: Vec<Tile>,
   pub entities: [EntityState; NUM_TEMPLATES],
 }
@@ -37,14 +45,20 @@ pub enum ValidationError {
   IncompatibleBot { index: usize },
   #[snafu(display("Not enough material"))]
   NotEnoughMaterial {},
-  #[snafu(display("Not enough tokens"))]
-  NotEnoughMaterialTokens {},
+  #[snafu(display("Not enough tokens to validate {:}", tokens))]
+  NotEnoughTokensToValidate { tokens: usize },
 }
 
 #[derive(Debug, Snafu)]
 pub enum UpdateError {
-  #[snafu(display("Not enough tokens {:} to remove {:}", tokens, remove))]
-  NotEnoughTokens { tokens: usize, remove: usize },
+  #[snafu(display("Not enough material to guarantee remainder"))]
+  NotEnoughMaterialRemainder {},
+  #[snafu(display("Not enough material {:?} to cover {:}", mat_name, amount))]
+  NotEnoughMaterialUpdate { mat_name: MatName, amount: usize },
+  #[snafu(display("Not enough tokens {:}", tokens))]
+  NotEnoughTokens { tokens: usize },
+  #[snafu(display("Not enough min tokens {:} to remove {:}", min_tokens, remove))]
+  NotEnoughMinTokens { min_tokens: usize, remove: usize },
   #[snafu(display("Cannot sell empty bot {:}", index))]
   CannotSellEmptyBot { index: usize },
   #[snafu(display("Cannot buy empty bot {:}", index))]
@@ -58,6 +72,70 @@ pub enum UpdateError {
 }
 
 impl BFState {
+  pub fn get_materials(&self) -> Materials {
+    self.materials.clone()
+  }
+
+  pub fn add_material(&mut self, mat_name: MatName, amount: usize) {
+    match mat_name {
+      MatName::Carbon => self.materials.carbon += amount,
+      MatName::Silicon => self.materials.silicon += amount,
+      MatName::Plutonium => self.materials.plutonium += amount,
+      MatName::Copper => self.materials.copper += amount,
+    }
+  }
+
+  pub fn add_materials(&mut self, materials: Materials) {
+    self.materials += materials;
+  }
+
+  pub fn try_sub_materials(&mut self, materials: Materials) -> Result<(), UpdateError> {
+    if !(self.materials >= materials) {
+      Err(UpdateError::NotEnoughMaterialRemainder {})
+    } else {
+      self.materials -= materials;
+      Ok(())
+    }
+  }
+
+  pub fn insert_material_tile(
+    &mut self,
+    mat_name: MatName,
+    pos: Pos,
+    amount: usize,
+  ) -> Result<(), UpdateError> {
+    self.try_sub_material(mat_name, amount)?;
+    self.tiles[pos.to_index()].materials.carbon += 1;
+    self.tiles[pos.invert().to_index()].materials.carbon += 1;
+    Ok(())
+  }
+
+  pub fn erase_material_tile(&mut self, pos: Pos, remainder: Materials) -> Result<(), UpdateError> {
+    let tile = &mut self.tiles[pos.to_index()];
+    if !(tile.materials >= remainder) {
+      return Err(UpdateError::NotEnoughMaterialRemainder {});
+    }
+    let removal = tile.materials.clone() - remainder.clone();
+    self.materials += removal;
+    tile.materials = remainder;
+    Ok(())
+  }
+
+  pub fn try_sub_material(&mut self, mat_name: MatName, amount: usize) -> Result<(), UpdateError> {
+    let material_ref = match mat_name {
+      MatName::Carbon => &mut self.materials.carbon,
+      MatName::Silicon => &mut self.materials.silicon,
+      MatName::Plutonium => &mut self.materials.plutonium,
+      MatName::Copper => &mut self.materials.copper,
+    };
+    if *material_ref >= amount {
+      *material_ref -= amount;
+      Ok(())
+    } else {
+      Err(UpdateError::NotEnoughMaterialUpdate { mat_name, amount })
+    }
+  }
+
   pub fn get_tokens(&self) -> usize {
     self.tokens
   }
@@ -65,6 +143,7 @@ impl BFState {
   pub fn add_tokens(&mut self, other: usize) {
     self.tokens += other;
   }
+
   pub fn try_sub_tokens(&mut self, other: usize) -> Result<(), UpdateError> {
     if self.tokens >= other {
       self.tokens -= other;
@@ -72,6 +151,33 @@ impl BFState {
     } else {
       Err(UpdateError::NotEnoughTokens {
         tokens: self.tokens,
+      })
+    }
+  }
+
+  pub fn get_min_tokens(&self) -> usize {
+    self.min_tokens
+  }
+
+  pub fn try_add_min_tokens(&mut self, other: usize) -> Result<(), UpdateError> {
+    let tokens = self.cost().1;
+    if tokens >= self.min_tokens + other {
+      self.min_tokens += other;
+      return Ok(());
+    } else {
+      Err(UpdateError::NotEnoughTokens {
+        tokens: self.tokens,
+      })
+    }
+  }
+
+  pub fn try_sub_min_tokens(&mut self, other: usize) -> Result<(), UpdateError> {
+    if self.min_tokens >= other {
+      self.min_tokens -= other;
+      Ok(())
+    } else {
+      Err(UpdateError::NotEnoughMinTokens {
+        min_tokens: self.min_tokens,
         remove: other,
       })
     }
@@ -217,6 +323,15 @@ impl BFState {
     (material_cost, tokens, entities)
   }
 
+  pub fn check_validity(&self) -> Result<(), ValidationError> {
+    let tokens = self.cost().1;
+    if tokens < self.min_tokens {
+      return Err(ValidationError::NotEnoughTokensToValidate { tokens });
+    } else {
+      return Ok(());
+    }
+  }
+
   pub fn is_compatible(&self, reference: BFState) -> Result<bool, ValidationError> {
     // verify that costs match
     let new_cost = self.cost();
@@ -225,7 +340,7 @@ impl BFState {
       return Err(ValidationError::NotEnoughMaterial {});
     }
     if new_cost.1 > ref_cost.1 {
-      return Err(ValidationError::NotEnoughMaterialTokens {});
+      return Err(ValidationError::NotEnoughTokensToValidate { tokens: new_cost.1 });
     }
     for i in 0..NUM_TEMPLATES {
       if new_cost.2[i] < ref_cost.2[i] {

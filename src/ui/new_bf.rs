@@ -13,7 +13,7 @@ use std::path::Path;
 use super::canvas::{draw_entity, draw_floor, draw_mat_map};
 use super::entity_edit::{EntityEdit, EntityEditCommand};
 use super::ui::{build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect, Ui};
-use crate::state::bf::{BFState, EntityState, ValidationError};
+use crate::state::bf::{BFState, EntityState, MatName, ValidationError};
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{Mix, MixEntity, MovementType, Team};
 use crate::state::geometry::{board_iterator, Pos};
@@ -24,14 +24,6 @@ const XDISPL: f32 = 800.0;
 const YDISPL: f32 = 30.0;
 
 const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
-
-#[derive(Clone, Debug)]
-pub enum MatName {
-  Carbon,
-  Silicon,
-  Plutonium,
-  Copper,
-}
 
 #[derive(Clone, Debug)]
 pub enum Brush {
@@ -112,28 +104,28 @@ impl NewBF {
     let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
       &rects[0],
       "Carbon".to_string(),
-      self.state.materials.carbon,
+      self.state.get_materials().carbon,
       Command::MatPM(MatName::Carbon, Sign::Plus),
       Command::MatPM(MatName::Carbon, Sign::Minus),
     );
     panel.append(&mut build_incrementer::<Command>(
       &rects[1],
       "Silicon".to_string(),
-      self.state.materials.silicon,
+      self.state.get_materials().silicon,
       Command::MatPM(MatName::Silicon, Sign::Plus),
       Command::MatPM(MatName::Silicon, Sign::Minus),
     ));
     panel.append(&mut build_incrementer::<Command>(
       &rects[2],
       "Pluton.".to_string(),
-      self.state.materials.plutonium,
+      self.state.get_materials().plutonium,
       Command::MatPM(MatName::Plutonium, Sign::Plus),
       Command::MatPM(MatName::Plutonium, Sign::Minus),
     ));
     panel.append(&mut build_incrementer::<Command>(
       &rects[3],
       "Copper".to_string(),
-      self.state.materials.copper,
+      self.state.get_materials().copper,
       Command::MatPM(MatName::Copper, Sign::Plus),
       Command::MatPM(MatName::Copper, Sign::Minus),
     ));
@@ -182,7 +174,7 @@ impl NewBF {
     panel.append(&mut build_incrementer(
       &rects[1],
       "Min Tks".to_string(),
-      self.state.min_tokens,
+      self.state.get_min_tokens(),
       Command::Token(TknButton::MinTkns, Sign::Plus),
       Command::Token(TknButton::MinTkns, Sign::Minus),
     ));
@@ -270,6 +262,7 @@ impl NewBF {
   }
 
   fn is_valid(&self) -> Result<bool, ValidationError> {
+    self.state.check_validity()?;
     match self.new_type.clone() {
       NewBFType::BrandNew => Ok(true),
       NewBFType::Derived(reference) => self.state.is_compatible(reference),
@@ -467,39 +460,15 @@ impl Ui for NewBF {
         let command = self.panel.process_input(input.clone());
         match command {
           None => {}
-          Some(Command::MatPM(mat_name, sign)) => match mat_name {
-            MatName::Carbon => match sign {
-              Sign::Plus => {
-                self.state.materials.carbon += 1;
-              }
-              Sign::Minus => {
-                self.state.materials.carbon = self.state.materials.carbon.saturating_sub(1);
-              }
-            },
-            MatName::Silicon => match sign {
-              Sign::Plus => {
-                self.state.materials.silicon += 1;
-              }
-              Sign::Minus => {
-                self.state.materials.silicon = self.state.materials.silicon.saturating_sub(1);
-              }
-            },
-            MatName::Plutonium => match sign {
-              Sign::Plus => {
-                self.state.materials.plutonium += 1;
-              }
-              Sign::Minus => {
-                self.state.materials.plutonium = self.state.materials.plutonium.saturating_sub(1);
-              }
-            },
-            MatName::Copper => match sign {
-              Sign::Plus => {
-                self.state.materials.copper += 1;
-              }
-              Sign::Minus => {
-                self.state.materials.copper = self.state.materials.copper.saturating_sub(1);
-              }
-            },
+          Some(Command::MatPM(mat_name, sign)) => match sign {
+            Sign::Plus => {
+              self.state.add_material(mat_name, 1);
+            }
+            Sign::Minus => {
+              if let Err(e) = self.state.try_sub_material(mat_name, 1) {
+                self.message = format!("{}", e);
+              };
+            }
           },
           Some(Command::MatBrush(mat)) => {
             self.brush = match mat {
@@ -522,43 +491,37 @@ impl Ui for NewBF {
             },
             TknButton::MinTkns => match sign {
               Sign::Plus => {
-                self.state.min_tokens += 1;
+                if let Err(e) = self.state.try_add_min_tokens(1) {
+                  self.message = format!("{}", e);
+                }
               }
               Sign::Minus => {
-                self.state.min_tokens = self.state.min_tokens.saturating_sub(1);
+                if let Err(e) = self.state.try_sub_min_tokens(1) {
+                  self.message = format!("{}", e);
+                };
               }
             },
           },
           Some(Command::MapLeftClk(pos)) => match self.brush {
             Brush::Carbon => {
-              if self.state.materials.carbon > 0 {
-                self.state.materials.carbon -= 1;
-                self.state.tiles[pos.to_index()].materials.carbon += 1;
-                self.state.tiles[pos.invert().to_index()].materials.carbon += 1;
-              }
+              if let Err(e) = self.state.insert_material_tile(MatName::Carbon, pos, 1) {
+                self.message = format!("{}", e);
+              };
             }
             Brush::Silicon => {
-              if self.state.materials.silicon > 0 {
-                self.state.materials.silicon -= 1;
-                self.state.tiles[pos.to_index()].materials.silicon += 1;
-                self.state.tiles[pos.invert().to_index()].materials.silicon += 1;
-              }
+              if let Err(e) = self.state.insert_material_tile(MatName::Silicon, pos, 1) {
+                self.message = format!("{}", e);
+              };
             }
             Brush::Plutonium => {
-              if self.state.materials.plutonium > 0 {
-                self.state.materials.plutonium -= 1;
-                self.state.tiles[pos.to_index()].materials.plutonium += 1;
-                self.state.tiles[pos.invert().to_index()]
-                  .materials
-                  .plutonium += 1;
-              }
+              if let Err(e) = self.state.insert_material_tile(MatName::Plutonium, pos, 1) {
+                self.message = format!("{}", e);
+              };
             }
             Brush::Copper => {
-              if self.state.materials.copper > 0 {
-                self.state.materials.copper -= 1;
-                self.state.tiles[pos.to_index()].materials.copper += 1;
-                self.state.tiles[pos.invert().to_index()].materials.copper += 1;
-              }
+              if let Err(e) = self.state.insert_material_tile(MatName::Copper, pos, 1) {
+                self.message = format!("{}", e);
+              };
             }
             Brush::Bot(i) => {
               if let EntityState::Entity(_, k) = &mut self.state.entities[i] {
@@ -577,11 +540,15 @@ impl Ui for NewBF {
                   }
                   tile.entity_id = None;
                 }
-                self.state.materials += tile.materials.clone();
-                tile.materials.carbon = 0;
-                tile.materials.silicon = 0;
-                tile.materials.plutonium = 0;
-                tile.materials.copper = 0;
+                let remainder = Materials {
+                  carbon: 0,
+                  silicon: 0,
+                  plutonium: 0,
+                  copper: 0,
+                };
+                if let Err(e) = self.state.erase_material_tile(pos, remainder) {
+                  self.message = format!("{}", e);
+                };
               }
               NewBFType::Derived(reference) => {
                 let tile = &mut self.state.tiles[pos.to_index()];
@@ -594,10 +561,10 @@ impl Ui for NewBF {
                     tile.entity_id = None;
                   }
                 }
-                if tile.materials >= ref_tile.materials {
-                  self.state.materials += tile.materials.clone() - ref_tile.materials.clone();
-                  tile.materials = ref_tile.materials.clone();
-                }
+                let remainder = ref_tile.materials.clone();
+                if let Err(e) = self.state.erase_material_tile(pos, remainder) {
+                  self.message = format!("{}", e);
+                };
               }
             },
           },
@@ -686,9 +653,11 @@ impl Ui for NewBF {
             let new_entity_cost = self.state.entity_cost(i);
             let old_entity_cost = self.old_state.entity_cost(i);
             // check material cost
-            if new_entity_cost.0 <= self.state.materials.clone() + old_entity_cost.0.clone() {
-              self.state.materials += old_entity_cost.0.clone();
-              self.state.materials -= new_entity_cost.0;
+            if new_entity_cost.0 <= self.state.get_materials().clone() + old_entity_cost.0.clone() {
+              self.state.add_materials(old_entity_cost.0.clone());
+              if let Err(e) = self.state.try_sub_materials(new_entity_cost.0) {
+                self.message = format!("{}", e);
+              };
             } else {
               self.revert_from(&self.old_state.clone());
             }
