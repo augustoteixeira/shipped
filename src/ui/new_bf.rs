@@ -6,7 +6,6 @@ use futures::executor::block_on;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-use snafu::prelude::*;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -14,45 +13,17 @@ use std::path::Path;
 use super::canvas::{draw_entity, draw_floor, draw_mat_map};
 use super::entity_edit::{EntityEdit, EntityEditCommand};
 use super::ui::{build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect, Ui};
-use crate::state::bf::{BFState, EntityState};
+use crate::state::bf::{BFState, EntityState, ValidationError};
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
-use crate::state::entity::{cost, FullEntity, Mix, MixEntity, MovementType, Team};
+use crate::state::entity::{Mix, MixEntity, MovementType, Team};
 use crate::state::geometry::{board_iterator, Pos};
 use crate::state::materials::Materials;
-use crate::state::state::Tile;
 use crate::state::utils::get_next_file_number;
 
 const XDISPL: f32 = 800.0;
 const YDISPL: f32 = 30.0;
 
 const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
-
-#[derive(Debug, Snafu)]
-pub enum ValidationError {
-  #[snafu(display("Not enough {:?}", material))]
-  NotEnoughMaterial { material: MatName },
-  #[snafu(display("Cannot remove entity from level ({:}, {:})", pos.x, pos.y))]
-  RemoveEntityFromLevel { pos: Pos },
-  #[snafu(display("Cannot remove material from level ({:}, {:})", pos.x, pos.y))]
-  RemoveMaterialFromLevel { pos: Pos },
-  #[snafu(display("Cannot delete bot {:} from level", index))]
-  RemoveBotFromLevel { index: usize },
-  #[snafu(display("Bot {:} needs to be compatible with level", index))]
-  IncompatibleBot { index: usize },
-  #[snafu(display("Not enough material"))]
-  NotEnoughMaterialTotal {},
-  #[snafu(display("Not enough tokens"))]
-  NotEnoughMaterialTokens {},
-}
-
-fn construct_entities() -> [EntityState; NUM_TEMPLATES] {
-  [
-    EntityState::Empty,
-    EntityState::Empty,
-    EntityState::Empty,
-    EntityState::Empty,
-  ]
-}
 
 #[derive(Clone, Debug)]
 pub enum MatName {
@@ -204,7 +175,7 @@ impl NewBF {
     let mut panel: ButtonPanel<Command> = build_incrementer::<Command>(
       &rects[0],
       "Tokens".to_string(),
-      self.state.tokens,
+      self.state.get_tokens(),
       Command::Token(TknButton::Tokens, Sign::Plus),
       Command::Token(TknButton::Tokens, Sign::Minus),
     );
@@ -299,57 +270,9 @@ impl NewBF {
   }
 
   fn is_valid(&self) -> Result<bool, ValidationError> {
-    let new_cost = self.state.cost();
     match self.new_type.clone() {
       NewBFType::BrandNew => Ok(true),
-      NewBFType::Derived(reference) => {
-        // verify that costs match
-        let ref_cost = reference.cost();
-        if !(new_cost.0 <= ref_cost.0) {
-          return Err(ValidationError::NotEnoughMaterialTotal {});
-        }
-        if new_cost.1 > ref_cost.1 {
-          return Err(ValidationError::NotEnoughMaterialTokens {});
-        }
-        for i in 0..NUM_TEMPLATES {
-          if new_cost.2[i] < ref_cost.2[i] {
-            return Err(ValidationError::RemoveBotFromLevel { index: i });
-          }
-        }
-        // loop through board, verify deletions
-        for pos in board_iterator() {
-          let ref_entity = reference.tiles[pos.to_index()].entity_id;
-          let new_entity = self.state.tiles[pos.to_index()].entity_id;
-          if ref_entity.is_some() & (new_entity != ref_entity) {
-            return Err(ValidationError::RemoveEntityFromLevel { pos });
-          }
-          let ref_mat = &reference.tiles[pos.to_index()].materials;
-          let new_mat = &self.state.tiles[pos.to_index()].materials;
-          if !(ref_mat <= new_mat) {
-            return Err(ValidationError::RemoveMaterialFromLevel { pos });
-          }
-        }
-        // loop through templates, verifying bots
-        for i in 0..NUM_TEMPLATES {
-          let new_entity = &self.state.entities[i];
-          let ref_entity = &reference.entities[i];
-          match new_entity {
-            EntityState::Empty => {
-              if !matches!(ref_entity, EntityState::Empty) {
-                return Err(ValidationError::RemoveBotFromLevel { index: i });
-              }
-            }
-            EntityState::Entity(e, _) => {
-              if let EntityState::Entity(ref_e, _) = ref_entity {
-                if !e.compatible(ref_e) {
-                  return Err(ValidationError::IncompatibleBot { index: i });
-                }
-              }
-            }
-          }
-        }
-        Ok(true)
-      }
+      NewBFType::Derived(reference) => self.state.is_compatible(reference),
     }
   }
 
@@ -446,28 +369,7 @@ impl Ui for NewBF {
       floor[i] = rng.gen_range(0..7);
     }
     let new_bf_state = match &builder {
-      None => BFState {
-        materials: Materials {
-          carbon: 0,
-          silicon: 0,
-          plutonium: 0,
-          copper: 0,
-        },
-        tokens: 0,
-        min_tokens: 0,
-        tiles: (0..(WIDTH * HEIGHT))
-          .map(|_| Tile {
-            entity_id: None,
-            materials: Materials {
-              carbon: 0,
-              silicon: 0,
-              plutonium: 0,
-              copper: 0,
-            },
-          })
-          .collect(),
-        entities: construct_entities(),
-      },
+      None => BFState::new(),
       Some(state) => state.clone(),
     };
     let mut new_bf = NewBF {
@@ -610,10 +512,12 @@ impl Ui for NewBF {
           Some(Command::Token(tk_button, sign)) => match tk_button {
             TknButton::Tokens => match sign {
               Sign::Plus => {
-                self.state.tokens += 1;
+                self.state.add_tokens(1);
               }
               Sign::Minus => {
-                self.state.tokens = self.state.tokens.saturating_sub(1);
+                if let Err(e) = self.state.try_sub_tokens(1) {
+                  self.message = format!("{}", e);
+                };
               }
             },
             TknButton::MinTkns => match sign {
@@ -699,21 +603,15 @@ impl Ui for NewBF {
           },
           Some(Command::BotNumber(i, sign)) => match &mut self.state.entities[i] {
             EntityState::Empty => {}
-            EntityState::Entity(e, j) => match sign {
+            EntityState::Entity(_, _) => match sign {
               Sign::Minus => {
-                if *j > 0 {
-                  *j -= 1;
-                  self.state.materials += cost(&FullEntity::try_from(e.clone()).unwrap());
-                  self.state.tokens += e.tokens;
+                if let Err(e) = self.state.sell_bot(i) {
+                  self.message = format!("{}", e);
                 }
               }
               Sign::Plus => {
-                if self.state.materials >= cost(&FullEntity::try_from(e.clone()).unwrap()) {
-                  if self.state.tokens >= e.tokens {
-                    *j += 1;
-                    self.state.materials -= cost(&FullEntity::try_from(e.clone()).unwrap());
-                    self.state.tokens -= e.tokens;
-                  }
+                if let Err(e) = self.state.buy_bot(i) {
+                  self.message = format!("{}", e);
                 }
               }
             },
@@ -795,9 +693,11 @@ impl Ui for NewBF {
               self.revert_from(&self.old_state.clone());
             }
             // check token cost
-            if new_entity_cost.1 <= self.state.tokens + old_entity_cost.1 {
-              self.state.tokens += old_entity_cost.1;
-              self.state.tokens -= new_entity_cost.1;
+            if new_entity_cost.1 <= self.state.get_tokens() + old_entity_cost.1 {
+              self.state.add_tokens(old_entity_cost.1);
+              if let Err(e) = self.state.try_sub_tokens(new_entity_cost.1) {
+                self.message = format!("{}", e);
+              };
             } else {
               self.revert_from(&self.old_state.clone());
             }
