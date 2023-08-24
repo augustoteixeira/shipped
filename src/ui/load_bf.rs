@@ -211,8 +211,10 @@ impl Ui for LoadBF {
     match &mut self.state {
       LoadBFState::Showing(s, bf_state) => match command {
         Some(Command::SelectBF(level)) => {
-          self.state =
-            LoadBFState::NewSquad(NewBF::new(self.rect.clone(), Self::load_file(*level)));
+          self.state = LoadBFState::NewSquad(NewBF::new(
+            self.rect.clone(),
+            Self::load_file(*level).map(|bf| (bf, *level)),
+          ));
         }
         Some(Command::ChangeBF(sign)) => {
           let s_prime = plus_minus(*s, *sign);

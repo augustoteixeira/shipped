@@ -6,7 +6,7 @@ use futures::executor::block_on;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 
@@ -77,7 +77,7 @@ enum Screen {
 #[derive(Clone, Debug)]
 pub enum NewBFType {
   BrandNew,
-  Derived(BFState),
+  Derived(BFState, usize),
 }
 
 #[derive(Debug)]
@@ -265,7 +265,7 @@ impl NewBF {
     self.state.check_validity()?;
     match self.new_type.clone() {
       NewBFType::BrandNew => Ok(true),
-      NewBFType::Derived(reference) => self.state.is_compatible(reference),
+      NewBFType::Derived(reference, _) => self.state.is_compatible(reference),
     }
   }
 
@@ -301,15 +301,33 @@ impl NewBF {
   }
 
   fn save_nf(&self) -> usize {
-    let path = Path::new("./levels");
-    let next_file_number = get_next_file_number(path, "lvl".to_string());
-    let dest_filename = format!("{:05}", next_file_number);
-    let mut dest = path.join(dest_filename);
-    dest.set_extension("lvl");
-    let mut file = File::create(dest).unwrap();
-    let serialized = serde_json::to_string(&self.state).unwrap();
-    file.write_all(serialized.as_bytes()).unwrap();
-    next_file_number
+    match self.new_type {
+      NewBFType::BrandNew => {
+        let path = Path::new("./levels");
+        let next_file_number = get_next_file_number(path, "lvl".to_string());
+        let dest_filename = format!("{:05}", next_file_number);
+        let mut dest = path.join(dest_filename);
+        dest.set_extension("lvl");
+        let mut file = File::create(dest).unwrap();
+        let serialized = serde_json::to_string(&self.state).unwrap();
+        file.write_all(serialized.as_bytes()).unwrap();
+        next_file_number
+      }
+      NewBFType::Derived(_, level) => {
+        let path = &Path::new("./squads/").join(format!("{:05}", level));
+        if !path.exists() {
+          fs::create_dir_all(path.clone()).unwrap();
+        }
+        let next_file_number = get_next_file_number(&path, "sqd".to_string());
+        let dest_filename = format!("{:05}", next_file_number);
+        let mut dest = path.join(dest_filename);
+        dest.set_extension("sqd");
+        let mut file = File::create(dest).unwrap();
+        let serialized = serde_json::to_string(&self.state).unwrap();
+        file.write_all(serialized.as_bytes()).unwrap();
+        next_file_number
+      }
+    }
   }
 
   fn build_finish_dialogue(&self) -> ButtonPanel<Command> {
@@ -352,9 +370,9 @@ impl NewBF {
 #[async_trait]
 impl Ui for NewBF {
   type Command = ();
-  type Builder = Option<BFState>;
+  type Builder = Option<(BFState, usize)>;
 
-  fn new(rect: Rect, builder: Option<BFState>) -> Self {
+  fn new(rect: Rect, builder: Option<(BFState, usize)>) -> Self {
     let tileset = block_on(load_texture("assets/tileset.png")).unwrap();
     let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(25).try_into().unwrap();
     let mut floor = [0; WIDTH * HEIGHT];
@@ -363,7 +381,7 @@ impl Ui for NewBF {
     }
     let new_bf_state = match &builder {
       None => BFState::new(),
-      Some(state) => state.clone(),
+      Some((state, _)) => state.clone(),
     };
     let mut new_bf = NewBF {
       screen: Screen::Map,
@@ -377,7 +395,7 @@ impl Ui for NewBF {
       panel: ButtonPanel::new(rect, (vec![], vec![], vec![], vec![], vec![])),
       new_type: match builder {
         None => NewBFType::BrandNew,
-        Some(_) => NewBFType::Derived(new_bf_state),
+        Some((_, level)) => NewBFType::Derived(new_bf_state, level),
       },
     };
     new_bf.update_main_panel();
@@ -543,7 +561,7 @@ impl Ui for NewBF {
                   self.message = format!("{}", e);
                 };
               }
-              NewBFType::Derived(reference) => {
+              NewBFType::Derived(reference, _) => {
                 let ref_tile = &reference.get_tiles()[pos.to_index()];
                 if ref_tile.entity_id.is_some() {
                   self.message = format!("Cannot remove level bot {:?}", pos);
