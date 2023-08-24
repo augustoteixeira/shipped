@@ -47,6 +47,8 @@ pub enum ValidationError {
   NotEnoughMaterial {},
   #[snafu(display("Not enough tokens to validate {:}", tokens))]
   NotEnoughTokensToValidate { tokens: usize },
+  #[snafu(display("Board not symmetric at {:?}", pos))]
+  NotSymmetric { pos: Pos },
 }
 
 #[derive(Debug, Snafu)]
@@ -151,7 +153,9 @@ impl BFState {
     }
     let removal = tile.materials.clone() - remainder.clone();
     self.materials += removal;
-    tile.materials = remainder;
+    tile.materials = remainder.clone();
+    let sym_tile = &mut self.tiles[pos.invert().to_index()];
+    sym_tile.materials = remainder;
     Ok(())
   }
 
@@ -169,6 +173,7 @@ impl BFState {
           } else {
             *k -= 1;
             self.tiles[pos.to_index()].entity_id = Some(bot_index);
+            self.tiles[pos.invert().to_index()].entity_id = Some(bot_index);
           }
         }
       }
@@ -232,6 +237,7 @@ impl BFState {
         EntityState::Entity(_, k) => {
           *k += 1;
           tile.entity_id = None;
+          self.tiles[pos.invert().to_index()].entity_id = None;
         }
       },
     }
@@ -442,6 +448,12 @@ impl BFState {
 
   pub fn check_validity(&self) -> Result<(), ValidationError> {
     let tokens = self.cost().1;
+
+    for pos in board_iterator() {
+      if !(self.tiles[pos.to_index()] == self.tiles[pos.invert().to_index()]) {
+        return Err(ValidationError::NotSymmetric { pos });
+      }
+    }
     if tokens < self.min_tokens {
       return Err(ValidationError::NotEnoughTokensToValidate { tokens });
     } else {

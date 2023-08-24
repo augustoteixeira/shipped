@@ -15,7 +15,7 @@ use super::materials::Materials;
 
 pub type Id = usize;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Tile {
   pub materials: Materials,
   pub entity_id: Option<Id>,

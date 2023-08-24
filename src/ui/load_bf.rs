@@ -33,6 +33,7 @@ pub enum Command {
   NewSquadForBF(usize),
   BuildBattle(usize),
   ChangeBF(Sign),
+  ChangeSquad(Team, Sign),
   Exit,
 }
 
@@ -116,7 +117,6 @@ impl LoadBF {
         ));
       }
       LoadBFState::SelectingSquads(BattleParams {
-        level,
         blue_index,
         red_index,
         ..
@@ -126,15 +126,15 @@ impl LoadBF {
           &rects[0],
           "Blue Squad".to_string(),
           *blue_index,
-          Command::ChangeBF(Sign::Plus),
-          Command::ChangeBF(Sign::Minus),
+          Command::ChangeSquad(Team::Blue, Sign::Plus),
+          Command::ChangeSquad(Team::Blue, Sign::Minus),
         ));
         panel.append(&mut build_incrementer::<Command>(
           &rects[1],
           "Red Squad".to_string(),
           *red_index,
-          Command::ChangeBF(Sign::Plus),
-          Command::ChangeBF(Sign::Minus),
+          Command::ChangeSquad(Team::Red, Sign::Plus),
+          Command::ChangeSquad(Team::Red, Sign::Minus),
         ));
       }
       LoadBFState::NewSquad(_) => {}
@@ -280,20 +280,16 @@ impl Ui for LoadBF {
       }) => {
         draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
         for pos in board_iterator() {
-          let relevant_squad = if pos.y >= HEIGHT / 2 {
-            &blue_squad
+          let (tile, entity) = if pos.y >= HEIGHT / 2 {
+            (
+              red_squad.get_tiles()[pos.to_index()],
+              red_squad.get_entities()[pos.to_index()],
+            )
           } else {
-            &red_squad
+            blue_squad.get_tiles()[pos.to_index()];
           };
-          draw_materials(
-            relevant_squad.get_tiles()[pos.to_index()].materials.clone(),
-            XDISPL,
-            YDISPL,
-            pos,
-            &self.tileset,
-          )
-          .await;
-          if let Some(id) = &relevant_squad.get_tiles()[pos.to_index()].entity_id {
+          draw_materials(tile.materials.clone(), XDISPL, YDISPL, pos, &self.tileset).await;
+          if let Some(id) = &tile.entity_id {
             if let EntityState::Entity(e, _) = &relevant_squad.get_entities()[*id] {
               draw_entity(
                 Some(&e.clone().try_into().unwrap()),
@@ -363,6 +359,7 @@ impl Ui for LoadBF {
             _ => {}
           }
         }
+        Some(Command::ChangeSquad(team, sign)) => {}
         Some(Command::Exit) => {
           return Some(());
         }
@@ -384,11 +381,46 @@ impl Ui for LoadBF {
           return Some(());
         }
       }
-      LoadBFState::SelectingSquads(_) => {
-        if let Some(Command::Exit) = command {
-          return Some(());
+      LoadBFState::SelectingSquads(ref mut battle_params) => match command {
+        Some(Command::ChangeSquad(team, sign)) => {
+          let BattleParams {
+            level,
+            blue_index,
+            red_index,
+            blue_squad,
+            red_squad,
+          } = battle_params;
+          println!(
+            "before: {:}, {:}, {:?}",
+            *blue_index,
+            *red_index,
+            red_squad.clone()
+          );
+          let (relevant_squad, relevant_index) = match team {
+            Team::Blue => (blue_squad, blue_index),
+            Team::Red => (red_squad, red_index),
+            _ => unimplemented!(),
+          };
+          let s_prime = plus_minus(*relevant_index, *sign);
+          match Self::load_squad_file(*level, s_prime) {
+            Some(state) => {
+              println!("A");
+              *relevant_squad = state;
+              *relevant_index = s_prime;
+            }
+            _ => {}
+          }
+          println!(
+            "after: {:}, {:}",
+            battle_params.blue_index, battle_params.red_index
+          );
+          self.state = LoadBFState::SelectingSquads(battle_params.clone());
+          if let Some(Command::Exit) = command {
+            return Some(());
+          }
         }
-      }
+        _ => {}
+      },
       LoadBFState::NewSquad(n) => match n.process_input(input.clone()) {
         Some(()) => {
           if let Some(state) = Self::load_level_file(0) {
