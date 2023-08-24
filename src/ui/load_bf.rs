@@ -12,7 +12,7 @@ use std::fs::File;
 use std::io::Read;
 //use std::path::Path;
 
-use super::canvas::{draw_entity, draw_floor, draw_mat_map};
+use super::canvas::{draw_entity, draw_floor, draw_mat_map, draw_materials};
 //use super::entity_edit::{EntityEdit, EntityEditCommand};
 use super::new_bf::NewBF;
 use super::ui::{
@@ -21,9 +21,7 @@ use super::ui::{
 use crate::state::bf::{BFState, EntityState};
 use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::Team;
-//use crate::state::entity::{Mix, MixEntity, MovementType, Team};
 use crate::state::geometry::{board_iterator, Pos};
-//use crate::state::materials::Materials;
 
 const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
 
@@ -32,15 +30,26 @@ const YDISPL: f32 = 30.0;
 
 #[derive(Clone, Debug)]
 pub enum Command {
-  SelectBF(usize),
+  NewSquadForBF(usize),
+  BuildBattle(usize),
   ChangeBF(Sign),
   Exit,
+}
+
+#[derive(Clone, Debug)]
+pub struct BattleParams {
+  level: usize,
+  blue_index: usize,
+  red_index: usize,
+  blue_squad: BFState,
+  red_squad: BFState,
 }
 
 #[derive(Debug)]
 pub enum LoadBFState {
   NoFiles,
-  Showing(usize, BFState),
+  Showing(usize, BFState, bool),
+  SelectingSquads(BattleParams),
   NewSquad(NewBF),
 }
 
@@ -68,8 +77,8 @@ impl LoadBF {
           ("No levels".to_string(), Command::Exit, false, false),
         ));
       }
-      LoadBFState::Showing(s, _) => {
-        let rects: Vec<Rect> = split(rect, vec![0.0, 1.0], vec![0.0, 0.3, 0.6]);
+      LoadBFState::Showing(s, _, has_squads) => {
+        let rects: Vec<Rect> = split(rect, vec![0.0, 0.5], vec![0.0, 0.3, 0.45, 0.6]);
         panel.append(&mut build_incrementer::<Command>(
           &rects[0],
           "Level".to_string(),
@@ -77,9 +86,55 @@ impl LoadBF {
           Command::ChangeBF(Sign::Plus),
           Command::ChangeBF(Sign::Minus),
         ));
+        match has_squads {
+          true => {
+            panel.push(Button::<Command>::new(
+              trim_margins(rects[1].clone(), 0.1, 0.1, 0.1, 0.1),
+              ("Battle".to_string(), Command::BuildBattle(*s), true, false),
+            ));
+          }
+          false => {
+            panel.push(Button::<Command>::new(
+              trim_margins(rects[1].clone(), 0.1, 0.1, 0.1, 0.1),
+              (
+                "No squads".to_string(),
+                Command::NewSquadForBF(*s),
+                false,
+                false,
+              ),
+            ));
+          }
+        }
         panel.push(Button::<Command>::new(
-          rects[1].clone(),
-          ("Load".to_string(), Command::SelectBF(*s), true, false),
+          trim_margins(rects[2].clone(), 0.1, 0.1, 0.1, 0.1),
+          (
+            "New squad".to_string(),
+            Command::NewSquadForBF(*s),
+            true,
+            false,
+          ),
+        ));
+      }
+      LoadBFState::SelectingSquads(BattleParams {
+        level,
+        blue_index,
+        red_index,
+        ..
+      }) => {
+        let rects: Vec<Rect> = split(rect, vec![0.0, 0.5, 1.0], vec![0.0, 0.3]);
+        panel.append(&mut build_incrementer::<Command>(
+          &rects[0],
+          "Blue Squad".to_string(),
+          *blue_index,
+          Command::ChangeBF(Sign::Plus),
+          Command::ChangeBF(Sign::Minus),
+        ));
+        panel.append(&mut build_incrementer::<Command>(
+          &rects[1],
+          "Red Squad".to_string(),
+          *red_index,
+          Command::ChangeBF(Sign::Plus),
+          Command::ChangeBF(Sign::Minus),
         ));
       }
       LoadBFState::NewSquad(_) => {}
@@ -99,15 +154,33 @@ impl LoadBF {
       0.05,
       0.05,
     );
-    let rects: Vec<Rect> = split(&left_rect, vec![0.0, 0.3, 1.0], vec![0.0, 0.8, 1.0]);
+    let rects: Vec<Rect> = split(&left_rect, vec![0.0, 0.6, 1.0], vec![0.0, 0.8, 1.0]);
     self.panel = self.build_panel(&rects[0]);
   }
 
-  fn load_file(n: usize) -> Option<BFState> {
+  fn load_level_file(n: usize) -> Option<BFState> {
     let path = Path::new("./levels");
     let dest_filename = format!("{:05}", n);
     let mut dest = path.join(dest_filename);
     dest.set_extension("lvl");
+    if dest.exists() {
+      let mut file = File::open(dest).unwrap();
+      let mut contents = String::new();
+      file.read_to_string(&mut contents).unwrap();
+      Some(serde_json::from_str(&contents).unwrap())
+    } else {
+      None
+    }
+  }
+
+  fn load_squad_file(level: usize, n: usize) -> Option<BFState> {
+    let path = &Path::new("./squads/").join(format!("{:05}", level));
+    if !path.exists() {
+      return None;
+    };
+    let dest_filename = format!("{:05}", n);
+    let mut dest = path.join(dest_filename);
+    dest.set_extension("sqd");
     if dest.exists() {
       let mut file = File::open(dest).unwrap();
       let mut contents = String::new();
@@ -134,8 +207,8 @@ impl Ui for LoadBF {
     // find out if there exists file zero
     let mut load_bf = LoadBF {
       rect: rect.clone(),
-      state: match Self::load_file(0) {
-        Some(state) => LoadBFState::Showing(0, state),
+      state: match Self::load_level_file(0) {
+        Some(state) => LoadBFState::Showing(0, state, Self::load_squad_file(0, 0).is_some()),
         None => LoadBFState::NoFiles,
       },
       floor,
@@ -148,7 +221,7 @@ impl Ui for LoadBF {
 
   async fn draw(&self) {
     match &self.state {
-      LoadBFState::Showing(_, bf_state) => {
+      LoadBFState::Showing(_, bf_state, _) => {
         draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
         draw_mat_map(&bf_state.get_tiles(), XDISPL, YDISPL, &self.tileset).await;
         for pos in board_iterator() {
@@ -200,6 +273,69 @@ impl Ui for LoadBF {
       LoadBFState::NoFiles => {
         self.panel.draw().await;
       }
+      LoadBFState::SelectingSquads(BattleParams {
+        blue_squad,
+        red_squad,
+        ..
+      }) => {
+        draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
+        for pos in board_iterator() {
+          let relevant_squad = if pos.y >= HEIGHT / 2 {
+            &blue_squad
+          } else {
+            &red_squad
+          };
+          draw_materials(
+            relevant_squad.get_tiles()[pos.to_index()].materials.clone(),
+            XDISPL,
+            YDISPL,
+            pos,
+            &self.tileset,
+          )
+          .await;
+          if let Some(id) = &relevant_squad.get_tiles()[pos.to_index()].entity_id {
+            if let EntityState::Entity(e, _) = &relevant_squad.get_entities()[*id] {
+              draw_entity(
+                Some(&e.clone().try_into().unwrap()),
+                XDISPL,
+                YDISPL,
+                pos,
+                &self.tileset,
+              )
+              .await;
+              let mut f = e.clone();
+              f.team = Team::Red;
+              draw_entity(
+                Some(&f.try_into().unwrap()),
+                XDISPL,
+                YDISPL,
+                Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
+                &self.tileset,
+              )
+              .await;
+            }
+          }
+        }
+        for i in 0..=WIDTH {
+          draw_line(
+            XDISPL + (i as f32) * 16.0,
+            YDISPL,
+            XDISPL + (i as f32) * 16.0,
+            YDISPL + (60.0 * 16.0),
+            1.0,
+            SMOKE,
+          );
+          draw_line(
+            XDISPL,
+            YDISPL + (i as f32) * 16.0,
+            XDISPL + (60.0 * 16.0),
+            YDISPL + (i as f32) * 16.0,
+            1.0,
+            SMOKE,
+          );
+        }
+        self.panel.draw().await;
+      }
       LoadBFState::NewSquad(n) => {
         n.draw().await;
       }
@@ -209,19 +345,20 @@ impl Ui for LoadBF {
   fn process_input(&mut self, input: Input) -> Option<()> {
     let command = &self.panel.process_input(input.clone());
     match &mut self.state {
-      LoadBFState::Showing(s, bf_state) => match command {
-        Some(Command::SelectBF(level)) => {
+      LoadBFState::Showing(s, bf_state, has_squads) => match command {
+        Some(Command::NewSquadForBF(level)) => {
           self.state = LoadBFState::NewSquad(NewBF::new(
             self.rect.clone(),
-            Self::load_file(*level).map(|bf| (bf, *level)),
+            Self::load_level_file(*level).map(|bf| (bf, *level)),
           ));
         }
         Some(Command::ChangeBF(sign)) => {
           let s_prime = plus_minus(*s, *sign);
-          match Self::load_file(s_prime) {
+          match Self::load_level_file(s_prime) {
             Some(state) => {
               *bf_state = state;
               *s = s_prime;
+              *has_squads = Self::load_squad_file(s_prime, 0).is_some();
             }
             _ => {}
           }
@@ -229,17 +366,33 @@ impl Ui for LoadBF {
         Some(Command::Exit) => {
           return Some(());
         }
-        _ => {}
+        Some(Command::BuildBattle(level)) => {
+          if let Some(sqd) = Self::load_squad_file(*level, 0) {
+            self.state = LoadBFState::SelectingSquads(BattleParams {
+              level: *level,
+              blue_index: 0,
+              red_index: 0,
+              blue_squad: sqd.clone(),
+              red_squad: sqd.clone(),
+            })
+          }
+        }
+        None => {}
       },
       LoadBFState::NoFiles => {
         if let Some(Command::Exit) = command {
           return Some(());
         }
       }
+      LoadBFState::SelectingSquads(_) => {
+        if let Some(Command::Exit) = command {
+          return Some(());
+        }
+      }
       LoadBFState::NewSquad(n) => match n.process_input(input.clone()) {
         Some(()) => {
-          if let Some(state) = Self::load_file(0) {
-            self.state = LoadBFState::Showing(0, state);
+          if let Some(state) = Self::load_level_file(0) {
+            self.state = LoadBFState::Showing(0, state, Self::load_squad_file(0, 0).is_some());
           }
         }
         _ => {}
