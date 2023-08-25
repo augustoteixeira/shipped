@@ -85,6 +85,26 @@ pub enum UpdateError {
   OutOfBounds { pos: Pos },
 }
 
+pub fn join_tiles(blue: &BFState, red: &BFState) -> Vec<Tile> {
+  let mut result: Vec<Tile> = Vec::with_capacity(HEIGHT * WIDTH);
+  for _ in 0..HEIGHT * WIDTH {
+    result.push(Tile {
+      materials: Materials {
+        carbon: 0,
+        silicon: 0,
+        plutonium: 0,
+        copper: 0,
+      },
+      entity_id: None,
+    });
+  }
+  for pos in half_board_iterator() {
+    result[pos.to_index()] = blue.get_tiles()[pos.to_index()].clone();
+    result[pos.invert().to_index()] = red.get_tiles()[pos.to_index()].clone();
+  }
+  result
+}
+
 impl BFState {
   pub fn get_tiles(&self) -> &Vec<Tile> {
     &self.tiles
@@ -126,33 +146,29 @@ impl BFState {
     pos: Pos,
     amount: usize,
   ) -> Result<(), UpdateError> {
-    if !pos.is_bottom() {
+    if !pos.is_withing_half() {
       return Err(UpdateError::OutOfBounds { pos });
     }
     self.try_sub_material(mat_name.clone(), amount)?;
     match mat_name {
       MatName::Carbon => {
         self.tiles[pos.to_index()].materials.carbon += 1;
-        self.tiles[pos.invert().to_index()].materials.carbon += 1;
       }
       MatName::Silicon => {
         self.tiles[pos.to_index()].materials.silicon += 1;
-        self.tiles[pos.invert().to_index()].materials.silicon += 1;
       }
       MatName::Plutonium => {
         self.tiles[pos.to_index()].materials.plutonium += 1;
-        self.tiles[pos.invert().to_index()].materials.plutonium += 1;
       }
       MatName::Copper => {
         self.tiles[pos.to_index()].materials.copper += 1;
-        self.tiles[pos.invert().to_index()].materials.copper += 1;
       }
     }
     Ok(())
   }
 
   pub fn erase_material_tile(&mut self, pos: Pos, remainder: Materials) -> Result<(), UpdateError> {
-    if !pos.is_bottom() {
+    if !pos.is_withing_half() {
       return Err(UpdateError::OutOfBounds { pos });
     }
     let tile = &mut self.tiles[pos.to_index()];
@@ -162,13 +178,11 @@ impl BFState {
     let removal = tile.materials.clone() - remainder.clone();
     self.materials += removal;
     tile.materials = remainder.clone();
-    let sym_tile = &mut self.tiles[pos.invert().to_index()];
-    sym_tile.materials = remainder;
     Ok(())
   }
 
   pub fn add_bot_board(&mut self, bot_index: usize, pos: Pos) -> Result<(), UpdateError> {
-    if !pos.is_bottom() {
+    if !pos.is_withing_half() {
       return Err(UpdateError::OutOfBounds { pos });
     }
     match &mut self.entities[bot_index] {
@@ -184,7 +198,6 @@ impl BFState {
           } else {
             *k -= 1;
             self.tiles[pos.to_index()].entity_id = Some(bot_index);
-            self.tiles[pos.invert().to_index()].entity_id = Some(bot_index);
           }
         }
       }
@@ -238,7 +251,7 @@ impl BFState {
   }
 
   pub fn erase_bot_from_board(&mut self, pos: Pos) -> Result<(), UpdateError> {
-    if !pos.is_bottom() {
+    if !pos.is_withing_half() {
       return Err(UpdateError::OutOfBounds { pos });
     }
     let tile = &mut self.tiles[pos.to_index()];
@@ -251,7 +264,6 @@ impl BFState {
         EntityState::Entity(_, k) => {
           *k += 1;
           tile.entity_id = None;
-          self.tiles[pos.invert().to_index()].entity_id = None;
         }
       },
     }
@@ -458,11 +470,6 @@ impl BFState {
 
   pub fn check_validity(&self) -> Result<(), ValidationError> {
     let tokens = self.cost().1;
-    // for pos in board_iterator() {
-    //   if !(self.tiles[pos.to_index()] == self.tiles[pos.invert().to_index()]) {
-    //     return Err(ValidationError::NotSymmetric { pos });
-    //   }
-    // }
     if tokens < self.min_tokens {
       return Err(ValidationError::NotEnoughTokensToValidate { tokens });
     } else {

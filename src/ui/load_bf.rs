@@ -3,6 +3,7 @@ extern crate rand_chacha;
 
 use async_trait::async_trait;
 use futures::executor::block_on;
+use macroquad::miniquad::native::linux_x11::libx11::XkbSetDetectableAutoRepeat;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
@@ -18,10 +19,11 @@ use super::new_bf::NewBF;
 use super::ui::{
   build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
 };
-use crate::state::bf::{BFState, EntityState};
+use crate::state::bf::{join_tiles, BFState, EntityState};
 use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::Team;
-use crate::state::geometry::{board_iterator, Pos};
+use crate::state::geometry::{board_iterator, half_board_iterator, Pos};
+use crate::state::state::Tile;
 
 const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
 
@@ -44,12 +46,21 @@ pub struct BattleParams {
   red_index: usize,
   blue_squad: BFState,
   red_squad: BFState,
+  joined_tiles: Vec<Tile>,
+}
+
+#[derive(Debug)]
+pub struct ShowingDetails {
+  level: usize,
+  level_state: BFState,
+  has_squads: bool,
+  joined_tiles: Vec<Tile>,
 }
 
 #[derive(Debug)]
 pub enum LoadBFState {
   NoFiles,
-  Showing(usize, BFState, bool),
+  Showing(ShowingDetails),
   SelectingSquads(BattleParams),
   NewSquad(NewBF),
 }
@@ -78,7 +89,12 @@ impl LoadBF {
           ("No levels".to_string(), Command::Exit, false, false),
         ));
       }
-      LoadBFState::Showing(s, _, has_squads) => {
+      LoadBFState::Showing(ShowingDetails {
+        level: s,
+        level_state: _,
+        has_squads,
+        ..
+      }) => {
         let rects: Vec<Rect> = split(rect, vec![0.0, 0.5], vec![0.0, 0.3, 0.45, 0.6]);
         panel.append(&mut build_incrementer::<Command>(
           &rects[0],
@@ -155,6 +171,15 @@ impl LoadBF {
       0.05,
     );
     let rects: Vec<Rect> = split(&left_rect, vec![0.0, 0.6, 1.0], vec![0.0, 0.8, 1.0]);
+    if let LoadBFState::SelectingSquads(BattleParams {
+      blue_squad,
+      red_squad,
+      joined_tiles,
+      ..
+    }) = &mut self.state
+    {
+      *joined_tiles = join_tiles(blue_squad, red_squad);
+    }
     self.panel = self.build_panel(&rects[0]);
   }
 
@@ -208,7 +233,12 @@ impl Ui for LoadBF {
     let mut load_bf = LoadBF {
       rect: rect.clone(),
       state: match Self::load_level_file(0) {
-        Some(state) => LoadBFState::Showing(0, state, Self::load_squad_file(0, 0).is_some()),
+        Some(state) => LoadBFState::Showing(ShowingDetails {
+          level: 0,
+          level_state: state.clone(),
+          has_squads: Self::load_squad_file(0, 0).is_some(),
+          joined_tiles: join_tiles(&state, &state),
+        }),
         None => LoadBFState::NoFiles,
       },
       floor,
@@ -221,32 +251,34 @@ impl Ui for LoadBF {
 
   async fn draw(&self) {
     match &self.state {
-      LoadBFState::Showing(_, bf_state, _) => {
+      LoadBFState::Showing(ShowingDetails {
+        level_state: bf_state,
+        joined_tiles: jt,
+        ..
+      }) => {
         draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
-        draw_mat_map(&bf_state.get_tiles(), XDISPL, YDISPL, &self.tileset).await;
-        for pos in board_iterator() {
-          if pos.y >= HEIGHT / 2 {
-            if let Some(id) = &bf_state.get_tiles()[pos.to_index()].entity_id {
-              if let EntityState::Entity(e, _) = &bf_state.get_entities()[*id] {
-                draw_entity(
-                  Some(&e.clone().try_into().unwrap()),
-                  XDISPL,
-                  YDISPL,
-                  pos,
-                  &self.tileset,
-                )
-                .await;
-                let mut f = e.clone();
-                f.team = Team::Red;
-                draw_entity(
-                  Some(&f.try_into().unwrap()),
-                  XDISPL,
-                  YDISPL,
-                  Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
-                  &self.tileset,
-                )
-                .await;
-              }
+        draw_mat_map(&jt, XDISPL, YDISPL, &self.tileset).await;
+        for pos in half_board_iterator() {
+          if let Some(id) = &bf_state.get_tiles()[pos.to_index()].entity_id {
+            if let EntityState::Entity(e, _) = &bf_state.get_entities()[*id] {
+              draw_entity(
+                Some(&e.clone().try_into().unwrap()),
+                XDISPL,
+                YDISPL,
+                pos,
+                &self.tileset,
+              )
+              .await;
+              // let mut f = e.clone();
+              // f.team = Team::Red;
+              // draw_entity(
+              //   Some(&f.try_into().unwrap()),
+              //   XDISPL,
+              //   YDISPL,
+              //   Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
+              //   &self.tileset,
+              // )
+              // .await;
             }
           }
         }
@@ -276,20 +308,16 @@ impl Ui for LoadBF {
       LoadBFState::SelectingSquads(BattleParams {
         blue_squad,
         red_squad,
+        joined_tiles,
         ..
       }) => {
         draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
         for pos in board_iterator() {
-          let (tile, entity) = if pos.y >= HEIGHT / 2 {
-            (
-              red_squad.get_tiles()[pos.to_index()].clone(),
-              red_squad.get_entities()[pos.to_index()].clone(),
-            )
+          let tile = joined_tiles[pos.to_index()].clone();
+          let entity = if pos.y < HEIGHT / 2 {
+            red_squad.get_entities()[pos.to_index()].clone()
           } else {
-            (
-              blue_squad.get_tiles()[pos.to_index()].clone(),
-              blue_squad.get_entities()[pos.to_index()].clone(),
-            )
+            blue_squad.get_entities()[pos.invert().to_index()].clone()
           };
           draw_materials(tile.materials.clone(), XDISPL, YDISPL, pos, &self.tileset).await;
           if let Some(id) = &tile.entity_id {
@@ -344,7 +372,12 @@ impl Ui for LoadBF {
   fn process_input(&mut self, input: Input) -> Option<()> {
     let command = &self.panel.process_input(input.clone());
     match &mut self.state {
-      LoadBFState::Showing(s, bf_state, has_squads) => match command {
+      LoadBFState::Showing(ShowingDetails {
+        level: s,
+        level_state: bf_state,
+        has_squads,
+        ..
+      }) => match command {
         Some(Command::NewSquadForBF(level)) => {
           self.state = LoadBFState::NewSquad(NewBF::new(
             self.rect.clone(),
@@ -374,6 +407,7 @@ impl Ui for LoadBF {
               red_index: 0,
               blue_squad: sqd.clone(),
               red_squad: sqd.clone(),
+              joined_tiles: join_tiles(&sqd, &sqd),
             })
           }
         }
@@ -392,6 +426,7 @@ impl Ui for LoadBF {
             red_index,
             blue_squad,
             red_squad,
+            joined_tiles,
           } = battle_params;
           println!(
             "before: {:}, {:}, {:?}",
@@ -427,7 +462,12 @@ impl Ui for LoadBF {
       LoadBFState::NewSquad(n) => match n.process_input(input.clone()) {
         Some(()) => {
           if let Some(state) = Self::load_level_file(0) {
-            self.state = LoadBFState::Showing(0, state, Self::load_squad_file(0, 0).is_some());
+            self.state = LoadBFState::Showing(ShowingDetails {
+              level: 0,
+              level_state: state.clone(),
+              has_squads: Self::load_squad_file(0, 0).is_some(),
+              joined_tiles: join_tiles(&state, &state),
+            });
           }
         }
         _ => {}

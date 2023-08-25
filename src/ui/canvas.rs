@@ -30,7 +30,7 @@ pub async fn draw_materials(
     draw_texture_ex(
       *tileset,
       h_displace + ((16 * pos.x) + rng.gen_range(0..13)) as f32,
-      v_displace + ((16 * pos.y) + rng.gen_range(0..13)) as f32,
+      v_displace + ((16 * (HEIGHT.saturating_sub(pos.y + 1))) + rng.gen_range(0..13)) as f32,
       WHITE,
       draw_params,
     );
@@ -48,7 +48,7 @@ pub async fn draw_materials(
     draw_texture_ex(
       *tileset,
       h_displace + ((16 * pos.x) + rng.gen_range(0..13)) as f32,
-      v_displace + ((16 * pos.y) + rng.gen_range(0..13)) as f32,
+      v_displace + ((16 * (HEIGHT.saturating_sub(pos.y + 1))) + rng.gen_range(0..13)) as f32,
       WHITE,
       draw_params,
     );
@@ -66,7 +66,7 @@ pub async fn draw_materials(
     draw_texture_ex(
       *tileset,
       h_displace + ((16 * pos.x) + rng.gen_range(0..13)) as f32,
-      v_displace + ((16 * pos.y) + rng.gen_range(0..13)) as f32,
+      v_displace + ((16 * (HEIGHT.saturating_sub(pos.y + 1))) + rng.gen_range(0..13)) as f32,
       WHITE,
       draw_params,
     );
@@ -84,7 +84,7 @@ pub async fn draw_materials(
     draw_texture_ex(
       *tileset,
       h_displace + ((16 * pos.x) + rng.gen_range(0..13)) as f32,
-      v_displace + ((16 * pos.y) + rng.gen_range(0..13)) as f32,
+      v_displace + ((16 * (HEIGHT.saturating_sub(pos.y + 1))) + rng.gen_range(0..13)) as f32,
       WHITE,
       draw_params,
     );
@@ -117,14 +117,14 @@ pub async fn draw_entity(
     draw_texture_ex(
       *tileset,
       h_displace + (pos.x as f32) * 16.,
-      v_displace + (pos.y as f32) * 16.,
+      v_displace + ((HEIGHT.saturating_sub(pos.y + 1)) as f32) * 16.,
       WHITE,
       draw_params,
     );
     if e.tokens > 0 {
       draw_rectangle(
         h_displace + (pos.x as f32) * 16.,
-        v_displace + (pos.y as f32) * 16.,
+        v_displace + ((HEIGHT.saturating_sub(pos.y + 1)) as f32) * 16.,
         2.0,
         2.0,
         LIGHTGRAY,

@@ -99,6 +99,12 @@ impl Pos {
   pub fn is_bottom(&self) -> bool {
     self.y < HEIGHT / 2
   }
+  pub fn is_withing_bounds(&self) -> bool {
+    self.y < HEIGHT && self.x < WIDTH
+  }
+  pub fn is_withing_half(&self) -> bool {
+    self.y < HEIGHT / 2 && self.x < WIDTH
+  }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

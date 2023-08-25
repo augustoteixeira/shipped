@@ -13,11 +13,12 @@ use std::path::Path;
 use super::canvas::{draw_entity, draw_floor, draw_mat_map};
 use super::entity_edit::{EntityEdit, EntityEditCommand};
 use super::ui::{build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect, Ui};
-use crate::state::bf::{BFState, EntityState, MatName, ValidationError};
+use crate::state::bf::{join_tiles, BFState, EntityState, MatName, ValidationError};
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::Team;
-use crate::state::geometry::{board_iterator, Pos};
+use crate::state::geometry::{half_board_iterator, Pos};
 use crate::state::materials::Materials;
+use crate::state::state::Tile;
 use crate::state::utils::get_next_file_number;
 
 const XDISPL: f32 = 800.0;
@@ -90,6 +91,7 @@ pub struct NewBF {
   rect: Rect,
   floor: [usize; WIDTH * HEIGHT],
   tileset: Texture2D,
+  joined_tiles: Vec<Tile>,
   panel: ButtonPanel<Command>,
   new_type: NewBFType,
 }
@@ -271,6 +273,7 @@ impl NewBF {
 
   fn update_main_panel(&mut self) {
     self.validate_state();
+    self.joined_tiles = join_tiles(&self.state, &self.state);
     let left_rect = trim_margins(
       split(&self.rect, vec![0.0, 0.45, 1.0], vec![0.0, 1.0])[0].clone(),
       0.05,
@@ -286,11 +289,11 @@ impl NewBF {
       trim_margins(rects[3].clone(), 0.3, 0.3, 0.3, 0.3),
       ("Save & Exit".to_string(), Command::Finish, true, false),
     ));
-    for pos in board_iterator().into_iter() {
+    for pos in half_board_iterator().into_iter() {
       button_panel.push(Button::<Command>::new(
         Rect::new(
           XDISPL + 16.0 * (pos.x as f32),
-          YDISPL + 16.0 * (pos.y as f32),
+          YDISPL + 16.0 * (HEIGHT.saturating_sub(pos.y + 1) as f32),
           16.0,
           16.0,
         ),
@@ -392,6 +395,7 @@ impl Ui for NewBF {
       old_state: new_bf_state.clone(),
       floor,
       tileset,
+      joined_tiles: vec![],
       panel: ButtonPanel::new(rect, (vec![], vec![], vec![], vec![], vec![])),
       new_type: match builder {
         None => NewBFType::BrandNew,
@@ -406,31 +410,29 @@ impl Ui for NewBF {
     self.panel.draw().await;
     draw_text(&self.message, 20.0, 40.0, 40.0, DARKBLUE);
     draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
-    draw_mat_map(&self.state.get_tiles(), XDISPL, YDISPL, &self.tileset).await;
+    draw_mat_map(&self.joined_tiles, XDISPL, YDISPL, &self.tileset).await;
     draw_rectangle(XDISPL, YDISPL, 16.0 * 60.0, 16.0 * 30.0, SMOKE);
-    for pos in board_iterator() {
-      if pos.y >= HEIGHT / 2 {
-        if let Some(id) = &self.state.get_tiles()[pos.to_index()].entity_id {
-          if let EntityState::Entity(e, _) = &self.state.get_entities()[*id] {
-            draw_entity(
-              Some(&e.clone().try_into().unwrap()),
-              XDISPL,
-              YDISPL,
-              pos,
-              &self.tileset,
-            )
-            .await;
-            let mut f = e.clone();
-            f.team = Team::Red;
-            draw_entity(
-              Some(&f.try_into().unwrap()),
-              XDISPL,
-              YDISPL,
-              Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
-              &self.tileset,
-            )
-            .await;
-          }
+    for pos in half_board_iterator() {
+      if let Some(id) = &self.state.get_tiles()[pos.to_index()].entity_id {
+        if let EntityState::Entity(e, _) = &self.state.get_entities()[*id] {
+          draw_entity(
+            Some(&e.clone().try_into().unwrap()),
+            XDISPL,
+            YDISPL,
+            pos,
+            &self.tileset,
+          )
+          .await;
+          let mut f = e.clone();
+          f.team = Team::Red;
+          draw_entity(
+            Some(&f.try_into().unwrap()),
+            XDISPL,
+            YDISPL,
+            Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
+            &self.tileset,
+          )
+          .await;
         }
       }
     }
