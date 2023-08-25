@@ -6,7 +6,7 @@ use snafu::prelude::*;
 
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{cost, FullEntity, Mix, MixEntity, MovementType, Team};
-use crate::state::geometry::{board_iterator, Pos};
+use crate::state::geometry::{half_board_iterator, Pos};
 use crate::state::materials::Materials;
 use crate::state::state::Tile;
 
@@ -81,6 +81,8 @@ pub enum UpdateError {
   NoTokensToBuyBot { index: usize },
   #[snafu(display("Cannot initialize non-empty bot {:}", index))]
   InitTwice { index: usize },
+  #[snafu(display("Out of bounds {:?}", pos))]
+  OutOfBounds { pos: Pos },
 }
 
 impl BFState {
@@ -124,6 +126,9 @@ impl BFState {
     pos: Pos,
     amount: usize,
   ) -> Result<(), UpdateError> {
+    if !pos.is_bottom() {
+      return Err(UpdateError::OutOfBounds { pos });
+    }
     self.try_sub_material(mat_name.clone(), amount)?;
     match mat_name {
       MatName::Carbon => {
@@ -147,6 +152,9 @@ impl BFState {
   }
 
   pub fn erase_material_tile(&mut self, pos: Pos, remainder: Materials) -> Result<(), UpdateError> {
+    if !pos.is_bottom() {
+      return Err(UpdateError::OutOfBounds { pos });
+    }
     let tile = &mut self.tiles[pos.to_index()];
     if !(tile.materials >= remainder) {
       return Err(UpdateError::NotEnoughMaterialRemainder {});
@@ -160,6 +168,9 @@ impl BFState {
   }
 
   pub fn add_bot_board(&mut self, bot_index: usize, pos: Pos) -> Result<(), UpdateError> {
+    if !pos.is_bottom() {
+      return Err(UpdateError::OutOfBounds { pos });
+    }
     match &mut self.entities[bot_index] {
       EntityState::Empty => {
         return Err(UpdateError::CannotAddEmptyBot { index: bot_index });
@@ -227,6 +238,9 @@ impl BFState {
   }
 
   pub fn erase_bot_from_board(&mut self, pos: Pos) -> Result<(), UpdateError> {
+    if !pos.is_bottom() {
+      return Err(UpdateError::OutOfBounds { pos });
+    }
     let tile = &mut self.tiles[pos.to_index()];
     match &mut tile.entity_id {
       None => {
@@ -358,7 +372,7 @@ impl BFState {
       },
       tokens: 0,
       min_tokens: 0,
-      tiles: (0..(WIDTH * HEIGHT))
+      tiles: (0..(WIDTH * HEIGHT / 2))
         .map(|_| Tile {
           entity_id: None,
           materials: Materials {
@@ -393,12 +407,10 @@ impl BFState {
       EntityState::Entity(e, k) => {
         let mut num_entities = *k;
         // loop through board, summing materials/entities
-        for pos in board_iterator() {
-          if pos.y >= HEIGHT / 2 {
-            let tile_entity = self.tiles[pos.to_index()].entity_id;
-            if tile_entity == Some(i) {
-              num_entities += 1;
-            }
+        for pos in half_board_iterator() {
+          let tile_entity = self.tiles[pos.to_index()].entity_id;
+          if tile_entity == Some(i) {
+            num_entities += 1;
           }
         }
         let mut entities_cost = cost(&FullEntity::try_from(e.clone()).unwrap());
@@ -416,15 +428,13 @@ impl BFState {
     let mut entities: [usize; 4] = [0; NUM_TEMPLATES];
     let mut tokens = self.tokens;
     // loop through board, summing materials/entities
-    for pos in board_iterator() {
-      if pos.y >= HEIGHT / 2 {
-        let tile_entity = self.tiles[pos.to_index()].entity_id;
-        if let Some(e) = tile_entity {
-          entities[e] += 1;
-        }
-        let tile_material = &self.tiles[pos.to_index()].materials;
-        material_cost += tile_material.clone();
+    for pos in half_board_iterator() {
+      let tile_entity = self.tiles[pos.to_index()].entity_id;
+      if let Some(e) = tile_entity {
+        entities[e] += 1;
       }
+      let tile_material = &self.tiles[pos.to_index()].materials;
+      material_cost += tile_material.clone();
     }
     // loop through templates, summing entities costs
     for i in 0..NUM_TEMPLATES {
@@ -448,12 +458,11 @@ impl BFState {
 
   pub fn check_validity(&self) -> Result<(), ValidationError> {
     let tokens = self.cost().1;
-
-    for pos in board_iterator() {
-      if !(self.tiles[pos.to_index()] == self.tiles[pos.invert().to_index()]) {
-        return Err(ValidationError::NotSymmetric { pos });
-      }
-    }
+    // for pos in board_iterator() {
+    //   if !(self.tiles[pos.to_index()] == self.tiles[pos.invert().to_index()]) {
+    //     return Err(ValidationError::NotSymmetric { pos });
+    //   }
+    // }
     if tokens < self.min_tokens {
       return Err(ValidationError::NotEnoughTokensToValidate { tokens });
     } else {
@@ -477,7 +486,7 @@ impl BFState {
       }
     }
     // loop through board, verify deletions
-    for pos in board_iterator() {
+    for pos in half_board_iterator() {
       let ref_entity = reference.tiles[pos.to_index()].entity_id;
       let new_entity = self.tiles[pos.to_index()].entity_id;
       if ref_entity.is_some() & (new_entity != ref_entity) {

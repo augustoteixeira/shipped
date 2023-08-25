@@ -282,15 +282,18 @@ impl Ui for LoadBF {
         for pos in board_iterator() {
           let (tile, entity) = if pos.y >= HEIGHT / 2 {
             (
-              red_squad.get_tiles()[pos.to_index()],
-              red_squad.get_entities()[pos.to_index()],
+              red_squad.get_tiles()[pos.to_index()].clone(),
+              red_squad.get_entities()[pos.to_index()].clone(),
             )
           } else {
-            blue_squad.get_tiles()[pos.to_index()];
+            (
+              blue_squad.get_tiles()[pos.to_index()].clone(),
+              blue_squad.get_entities()[pos.to_index()].clone(),
+            )
           };
           draw_materials(tile.materials.clone(), XDISPL, YDISPL, pos, &self.tileset).await;
           if let Some(id) = &tile.entity_id {
-            if let EntityState::Entity(e, _) = &relevant_squad.get_entities()[*id] {
+            if let EntityState::Entity(e, _) = &entity {
               draw_entity(
                 Some(&e.clone().try_into().unwrap()),
                 XDISPL,
