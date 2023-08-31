@@ -55,6 +55,13 @@ impl<T> Entity<T> {
   pub fn has_copper(&self) -> bool {
     self.materials.copper > 0
   }
+  pub fn swap_teams(&mut self) {
+    self.team = match self.team {
+      Team::Blue => Team::Red,
+      Team::Red => Team::Blue,
+      _ => unimplemented!(),
+    }
+  }
 }
 
 pub type Half = [u8; NUM_SUB_ENTITIES];

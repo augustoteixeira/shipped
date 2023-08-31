@@ -3,7 +3,6 @@ extern crate rand_chacha;
 
 use async_trait::async_trait;
 use futures::executor::block_on;
-use macroquad::miniquad::native::linux_x11::libx11::XkbSetDetectableAutoRepeat;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
@@ -269,16 +268,16 @@ impl Ui for LoadBF {
                 &self.tileset,
               )
               .await;
-              // let mut f = e.clone();
-              // f.team = Team::Red;
-              // draw_entity(
-              //   Some(&f.try_into().unwrap()),
-              //   XDISPL,
-              //   YDISPL,
-              //   Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
-              //   &self.tileset,
-              // )
-              // .await;
+              let mut f = e.clone();
+              f.team = Team::Red;
+              draw_entity(
+                Some(&f.try_into().unwrap()),
+                XDISPL,
+                YDISPL,
+                Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
+                &self.tileset,
+              )
+              .await;
             }
           }
         }
@@ -314,29 +313,22 @@ impl Ui for LoadBF {
         draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
         for pos in board_iterator() {
           let tile = joined_tiles[pos.to_index()].clone();
-          let entity = if pos.y < HEIGHT / 2 {
-            red_squad.get_entities()[pos.to_index()].clone()
-          } else {
-            blue_squad.get_entities()[pos.invert().to_index()].clone()
-          };
-          draw_materials(tile.materials.clone(), XDISPL, YDISPL, pos, &self.tileset).await;
-          if let Some(id) = &tile.entity_id {
-            if let EntityState::Entity(e, _) = &entity {
+          if let Some(id) = tile.entity_id {
+            let mut entity = if pos.y < HEIGHT / 2 {
+              red_squad.get_entities()[id].clone()
+            } else {
+              blue_squad.get_entities()[id].clone()
+            };
+            draw_materials(tile.materials.clone(), XDISPL, YDISPL, pos, &self.tileset).await;
+            if let EntityState::Entity(e, _) = &mut entity {
+              if pos.is_bottom() {
+                e.swap_teams();
+              }
               draw_entity(
                 Some(&e.clone().try_into().unwrap()),
                 XDISPL,
                 YDISPL,
                 pos,
-                &self.tileset,
-              )
-              .await;
-              let mut f = e.clone();
-              f.team = Team::Red;
-              draw_entity(
-                Some(&f.try_into().unwrap()),
-                XDISPL,
-                YDISPL,
-                Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
                 &self.tileset,
               )
               .await;
@@ -395,7 +387,7 @@ impl Ui for LoadBF {
             _ => {}
           }
         }
-        Some(Command::ChangeSquad(team, sign)) => {}
+        Some(Command::ChangeSquad(_, _)) => {}
         Some(Command::Exit) => {
           return Some(());
         }
@@ -426,14 +418,8 @@ impl Ui for LoadBF {
             red_index,
             blue_squad,
             red_squad,
-            joined_tiles,
+            ..
           } = battle_params;
-          println!(
-            "before: {:}, {:}, {:?}",
-            *blue_index,
-            *red_index,
-            red_squad.clone()
-          );
           let (relevant_squad, relevant_index) = match team {
             Team::Blue => (blue_squad, blue_index),
             Team::Red => (red_squad, red_index),
@@ -442,16 +428,11 @@ impl Ui for LoadBF {
           let s_prime = plus_minus(*relevant_index, *sign);
           match Self::load_squad_file(*level, s_prime) {
             Some(state) => {
-              println!("A");
               *relevant_squad = state;
               *relevant_index = s_prime;
             }
             _ => {}
           }
-          println!(
-            "after: {:}, {:}",
-            battle_params.blue_index, battle_params.red_index
-          );
           self.state = LoadBFState::SelectingSquads(battle_params.clone());
           if let Some(Command::Exit) = command {
             return Some(());
