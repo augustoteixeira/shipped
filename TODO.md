@@ -9,5 +9,9 @@ Add Coding
 UI
 --
 
-- save squads
 - add interface to view a game between two saved squads
+
+Code quality
+------------
+
+- make pre-entity (no position, no hp, no team...) for map edition

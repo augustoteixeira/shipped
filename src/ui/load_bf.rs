@@ -18,6 +18,7 @@ use super::new_bf::NewBF;
 use super::ui::{
   build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
 };
+use super::view::View;
 use crate::state::bf::{join_tiles, BFState, EntityState};
 use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::Team;
@@ -35,6 +36,7 @@ pub enum Command {
   BuildBattle(usize),
   ChangeBF(Sign),
   ChangeSquad(Team, Sign),
+  Start,
   Exit,
 }
 
@@ -62,6 +64,7 @@ pub enum LoadBFState {
   Showing(ShowingDetails),
   SelectingSquads(BattleParams),
   NewSquad(NewBF),
+  View(View),
 }
 
 pub struct LoadBF {
@@ -151,7 +154,12 @@ impl LoadBF {
           Command::ChangeSquad(Team::Red, Sign::Plus),
           Command::ChangeSquad(Team::Red, Sign::Minus),
         ));
+        panel.push(Button::<Command>::new(
+          trim_margins(self.rect.clone(), 0.6, 0.3, 0.1, 0.7),
+          ("Start Battle".to_string(), Command::Start, true, false),
+        ));
       }
+      LoadBFState::View(_) => {}
       LoadBFState::NewSquad(_) => {}
     }
     panel.push(Button::<Command>::new(
@@ -355,6 +363,7 @@ impl Ui for LoadBF {
         }
         self.panel.draw().await;
       }
+      LoadBFState::View(v) => v.draw().await,
       LoadBFState::NewSquad(n) => {
         n.draw().await;
       }
@@ -403,6 +412,7 @@ impl Ui for LoadBF {
             })
           }
         }
+        Some(_) => {}
         None => {}
       },
       LoadBFState::NoFiles => {
@@ -438,9 +448,28 @@ impl Ui for LoadBF {
             return Some(());
           }
         }
+        Some(Command::Start) => {
+          self.state = LoadBFState::View(View::new(self.rect.clone(), ()));
+        }
+        Some(Command::Exit) => {
+          return Some(());
+        }
         _ => {}
       },
       LoadBFState::NewSquad(n) => match n.process_input(input.clone()) {
+        Some(()) => {
+          if let Some(state) = Self::load_level_file(0) {
+            self.state = LoadBFState::Showing(ShowingDetails {
+              level: 0,
+              level_state: state.clone(),
+              has_squads: Self::load_squad_file(0, 0).is_some(),
+              joined_tiles: join_tiles(&state, &state),
+            });
+          }
+        }
+        _ => {}
+      },
+      LoadBFState::View(v) => match v.process_input(input.clone()) {
         Some(()) => {
           if let Some(state) = Self::load_level_file(0) {
             self.state = LoadBFState::Showing(ShowingDetails {
