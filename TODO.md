@@ -14,4 +14,5 @@ UI
 Code quality
 ------------
 
+- make tokens be part of template (see `build_entity_from_template` in `state/state`)
 - make pre-entity (no position, no hp, no team...) for map edition

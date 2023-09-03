@@ -267,7 +267,7 @@ impl NewBF {
     self.state.check_validity()?;
     match self.new_type.clone() {
       NewBFType::BrandNew => Ok(true),
-      NewBFType::Derived(reference, _) => self.state.is_compatible(reference),
+      NewBFType::Derived(reference, _) => self.state.is_compatible(&reference),
     }
   }
 

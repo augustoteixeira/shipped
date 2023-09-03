@@ -6,10 +6,7 @@ use futures::executor::block_on;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-use std::path::Path;
 //use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::Read;
 //use std::path::Path;
 
 use super::canvas::{draw_entity, draw_floor, draw_mat_map, draw_materials};
@@ -18,8 +15,8 @@ use super::new_bf::NewBF;
 use super::ui::{
   build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
 };
-use super::view::View;
-use crate::state::bf::{join_tiles, BFState, EntityState};
+use super::view::{PlayState, View, ViewState};
+use crate::state::bf::{join_tiles, load_level_file, load_squad_file, BFState, EntityState};
 use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::Team;
 use crate::state::geometry::{board_iterator, half_board_iterator, Pos};
@@ -189,39 +186,6 @@ impl LoadBF {
     }
     self.panel = self.build_panel(&rects[0]);
   }
-
-  fn load_level_file(n: usize) -> Option<BFState> {
-    let path = Path::new("./levels");
-    let dest_filename = format!("{:05}", n);
-    let mut dest = path.join(dest_filename);
-    dest.set_extension("lvl");
-    if dest.exists() {
-      let mut file = File::open(dest).unwrap();
-      let mut contents = String::new();
-      file.read_to_string(&mut contents).unwrap();
-      Some(serde_json::from_str(&contents).unwrap())
-    } else {
-      None
-    }
-  }
-
-  fn load_squad_file(level: usize, n: usize) -> Option<BFState> {
-    let path = &Path::new("./squads/").join(format!("{:05}", level));
-    if !path.exists() {
-      return None;
-    };
-    let dest_filename = format!("{:05}", n);
-    let mut dest = path.join(dest_filename);
-    dest.set_extension("sqd");
-    if dest.exists() {
-      let mut file = File::open(dest).unwrap();
-      let mut contents = String::new();
-      file.read_to_string(&mut contents).unwrap();
-      Some(serde_json::from_str(&contents).unwrap())
-    } else {
-      None
-    }
-  }
 }
 
 #[async_trait]
@@ -239,15 +203,27 @@ impl Ui for LoadBF {
     // find out if there exists file zero
     let mut load_bf = LoadBF {
       rect: rect.clone(),
-      state: match Self::load_level_file(0) {
-        Some(state) => LoadBFState::Showing(ShowingDetails {
+      // state: match load_level_file(0) {
+      //   Some(state) => LoadBFState::Showing(ShowingDetails {
+      //     level: 0,
+      //     level_state: state.clone(),
+      //     has_squads: load_squad_file(0, 0).is_some(),
+      //     joined_tiles: join_tiles(&state, &state),
+      //   }),
+      //   None => LoadBFState::NoFiles,
+      // },
+      state: LoadBFState::View(View::new(
+        rect.clone(),
+        ViewState {
           level: 0,
-          level_state: state.clone(),
-          has_squads: Self::load_squad_file(0, 0).is_some(),
-          joined_tiles: join_tiles(&state, &state),
-        }),
-        None => LoadBFState::NoFiles,
-      },
+          blue_squad_number: 0,
+          red_squad_number: 0,
+          current_frame: 0,
+          seconds: get_time(),
+          finished: false,
+          play_state: PlayState::Paused,
+        },
+      )),
       floor,
       tileset,
       panel: ButtonPanel::new(rect, (vec![], vec![], vec![], vec![], vec![])),
@@ -382,16 +358,16 @@ impl Ui for LoadBF {
         Some(Command::NewSquadForBF(level)) => {
           self.state = LoadBFState::NewSquad(NewBF::new(
             self.rect.clone(),
-            Self::load_level_file(*level).map(|bf| (bf, *level)),
+            load_level_file(*level).map(|bf| (bf, *level)),
           ));
         }
         Some(Command::ChangeBF(sign)) => {
           let s_prime = plus_minus(*s, *sign);
-          match Self::load_level_file(s_prime) {
+          match load_level_file(s_prime) {
             Some(state) => {
               *bf_state = state;
               *s = s_prime;
-              *has_squads = Self::load_squad_file(s_prime, 0).is_some();
+              *has_squads = load_squad_file(s_prime, 0).is_some();
             }
             _ => {}
           }
@@ -401,7 +377,7 @@ impl Ui for LoadBF {
           return Some(());
         }
         Some(Command::BuildBattle(level)) => {
-          if let Some(sqd) = Self::load_squad_file(*level, 0) {
+          if let Some(sqd) = load_squad_file(*level, 0) {
             self.state = LoadBFState::SelectingSquads(BattleParams {
               level: *level,
               blue_index: 0,
@@ -436,7 +412,7 @@ impl Ui for LoadBF {
             _ => unimplemented!(),
           };
           let s_prime = plus_minus(*relevant_index, *sign);
-          match Self::load_squad_file(*level, s_prime) {
+          match load_squad_file(*level, s_prime) {
             Some(state) => {
               *relevant_squad = state;
               *relevant_index = s_prime;
@@ -449,7 +425,18 @@ impl Ui for LoadBF {
           }
         }
         Some(Command::Start) => {
-          self.state = LoadBFState::View(View::new(self.rect.clone(), ()));
+          self.state = LoadBFState::View(View::new(
+            self.rect.clone(),
+            ViewState {
+              level: 0,
+              blue_squad_number: 0,
+              red_squad_number: 0,
+              current_frame: 0,
+              seconds: 0.0,
+              finished: false,
+              play_state: PlayState::Paused,
+            },
+          ));
         }
         Some(Command::Exit) => {
           return Some(());
@@ -458,11 +445,11 @@ impl Ui for LoadBF {
       },
       LoadBFState::NewSquad(n) => match n.process_input(input.clone()) {
         Some(()) => {
-          if let Some(state) = Self::load_level_file(0) {
+          if let Some(state) = load_level_file(0) {
             self.state = LoadBFState::Showing(ShowingDetails {
               level: 0,
               level_state: state.clone(),
-              has_squads: Self::load_squad_file(0, 0).is_some(),
+              has_squads: load_squad_file(0, 0).is_some(),
               joined_tiles: join_tiles(&state, &state),
             });
           }
@@ -471,13 +458,15 @@ impl Ui for LoadBF {
       },
       LoadBFState::View(v) => match v.process_input(input.clone()) {
         Some(()) => {
-          if let Some(state) = Self::load_level_file(0) {
+          if let Some(state) = load_level_file(0) {
             self.state = LoadBFState::Showing(ShowingDetails {
               level: 0,
               level_state: state.clone(),
-              has_squads: Self::load_squad_file(0, 0).is_some(),
+              has_squads: load_squad_file(0, 0).is_some(),
               joined_tiles: join_tiles(&state, &state),
             });
+            self.update_main_panel();
+            return None;
           }
         }
         _ => {}

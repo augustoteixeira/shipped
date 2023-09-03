@@ -38,7 +38,7 @@ pub struct State {
   red_codes: [Option<Code>; NUM_CODES],
   pub entities: HashMap<Id, FullEntity>,
   next_unique_id: usize,
-  blue_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
+  pub blue_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
   red_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
   pub tiles: Vec<Tile>,
 }

@@ -25,6 +25,21 @@ pub enum Team {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ActiveEntity {
+  pub tokens: usize,
+  pub team: Team,
+  pub pos: Pos,
+  pub hp: usize,
+  pub inventory_size: usize,
+  pub materials: Materials,
+  pub movement_type: MovementType,
+  pub gun_damage: usize,
+  pub drill_damage: usize,
+  pub message: Option<Message>,
+  pub brain: Option<Full>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Entity<T> {
   pub tokens: usize,
   pub team: Team,
@@ -140,6 +155,45 @@ pub struct TemplateEntity {
   pub drill_damage: usize,
   pub message: Option<Message>,
   pub brain: Full,
+}
+
+impl TryFrom<MixEntity> for TemplateEntity {
+  type Error = &'static str;
+  fn try_from(mix: MixEntity) -> Result<Self, Self::Error> {
+    match mix.brain {
+      Mix::Full(f) => Ok(TemplateEntity {
+        hp: mix.hp,
+        inventory_size: mix.inventory_size,
+        materials: mix.materials,
+        movement_type: mix.movement_type,
+        gun_damage: mix.gun_damage,
+        drill_damage: mix.drill_damage,
+        message: None,
+        brain: f,
+      }),
+      // Mix::Half(h) => Ok(TemplateEntity {
+      //   hp: mix.hp,
+      //   inventory_size: mix.inventory_size,
+      //   materials: mix.materials,
+      //   movement_type: mix.movement_type,
+      //   gun_damage: mix.gun_damage,
+      //   drill_damage: mix.drill_damage,
+      //   message: None,
+      //     brain: Full{half: h, code_index: 0, },
+      // }),
+      // Mix::Full(f) => Ok(TemplateEntity {
+      //   hp: mix.hp,
+      //   inventory_size: mix.inventory_size,
+      //   materials: mix.materials,
+      //   movement_type: mix.movement_type,
+      //   gun_damage: mix.gun_damage,
+      //   drill_damage: mix.drill_damage,
+      //   message: None,
+      //   brain: f,
+      // }),
+      _ => Err("Cannot convert to template"),
+    }
+  }
 }
 
 impl TryFrom<Entity<Mix>> for Entity<Full> {

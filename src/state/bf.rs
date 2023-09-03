@@ -1,14 +1,19 @@
 extern crate rand;
 extern crate rand_chacha;
 
+use init_array::init_array;
 use serde::{Deserialize, Serialize};
 use snafu::prelude::*;
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::Read;
+use std::path::Path;
 
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
-use crate::state::entity::{cost, FullEntity, Mix, MixEntity, MovementType, Team};
-use crate::state::geometry::{half_board_iterator, Pos};
+use crate::state::entity::{cost, FullEntity, Mix, MixEntity, MovementType, Team, TemplateEntity};
+use crate::state::geometry::{board_iterator, half_board_iterator, Pos};
 use crate::state::materials::Materials;
-use crate::state::state::Tile;
+use crate::state::state::{Id, State, Tile};
 
 #[derive(Clone, Debug)]
 pub enum MatName {
@@ -85,6 +90,39 @@ pub enum UpdateError {
   OutOfBounds { pos: Pos },
 }
 
+pub fn load_level_file(n: usize) -> Option<BFState> {
+  let path = Path::new("./levels");
+  let dest_filename = format!("{:05}", n);
+  let mut dest = path.join(dest_filename);
+  dest.set_extension("lvl");
+  if dest.exists() {
+    let mut file = File::open(dest).unwrap();
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).unwrap();
+    Some(serde_json::from_str(&contents).unwrap())
+  } else {
+    None
+  }
+}
+
+pub fn load_squad_file(level: usize, n: usize) -> Option<BFState> {
+  let path = &Path::new("./squads/").join(format!("{:05}", level));
+  if !path.exists() {
+    return None;
+  };
+  let dest_filename = format!("{:05}", n);
+  let mut dest = path.join(dest_filename);
+  dest.set_extension("sqd");
+  if dest.exists() {
+    let mut file = File::open(dest).unwrap();
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).unwrap();
+    Some(serde_json::from_str(&contents).unwrap())
+  } else {
+    None
+  }
+}
+
 pub fn join_tiles(blue: &BFState, red: &BFState) -> Vec<Tile> {
   let mut result: Vec<Tile> = Vec::with_capacity(HEIGHT * WIDTH);
   for _ in 0..HEIGHT * WIDTH {
@@ -103,6 +141,67 @@ pub fn join_tiles(blue: &BFState, red: &BFState) -> Vec<Tile> {
     result[pos.invert().to_index()] = red.get_tiles()[pos.to_index()].clone();
   }
   result
+}
+
+pub fn build_state(level: &BFState, blue: &BFState, red: &BFState) -> State {
+  assert!(blue.is_compatible(level).unwrap());
+  assert!(red.is_compatible(level).unwrap());
+  println!("{:?}", blue.entities);
+  let joined_tiles = join_tiles(&blue, &red);
+
+  let mut state = State::new(
+    level.min_tokens,
+    init_array(|_| None),
+    init_array(|_| None),
+    HashMap::<Id, FullEntity>::new(),
+    blue
+      .entities
+      .clone()
+      .into_iter()
+      .map(|es| match es {
+        EntityState::Entity(e, _) => e.try_into().ok(),
+        _ => None,
+      })
+      .collect::<Vec<Option<TemplateEntity>>>()
+      .try_into()
+      .unwrap(),
+    red
+      .entities
+      .clone()
+      .into_iter()
+      .map(|es| match es {
+        EntityState::Entity(e, _) => e.try_into().ok(),
+        _ => None,
+      })
+      .collect::<Vec<Option<TemplateEntity>>>()
+      .try_into()
+      .unwrap(),
+    (0..(WIDTH * HEIGHT))
+      .map(|_| Tile {
+        entity_id: None,
+        materials: Materials {
+          carbon: 0,
+          silicon: 0,
+          plutonium: 0,
+          copper: 0,
+        },
+      })
+      .collect(),
+  );
+  println!("{:?}", state.blue_templates);
+  for pos in half_board_iterator() {
+    if let Some(e) = joined_tiles[pos.to_index()].entity_id {
+      state
+        .build_entity_from_template(Team::Blue, 1, e, pos)
+        .unwrap();
+    }
+    if let Some(e) = joined_tiles[pos.invert().to_index()].entity_id {
+      state
+        .build_entity_from_template(Team::Red, 1, e, pos.invert())
+        .unwrap();
+    }
+  }
+  state
 }
 
 impl BFState {
@@ -477,7 +576,7 @@ impl BFState {
     }
   }
 
-  pub fn is_compatible(&self, reference: BFState) -> Result<bool, ValidationError> {
+  pub fn is_compatible(&self, reference: &BFState) -> Result<bool, ValidationError> {
     // verify that costs match
     let new_cost = self.cost();
     let ref_cost = reference.cost();
