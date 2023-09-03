@@ -72,10 +72,10 @@ impl Ui for Landing {
     Landing {
       rect: rect.clone(),
       //state: LandingState::NewBF(NewBF::new(rect.clone(), ())),
-      state: LandingState::LoadBF(LoadBF::new(rect.clone(), ())),
-      //      state: LandingState::Selection(LandingSelection {
-      //        buttons: button_grid(rect),
-      //      }),
+      //state: LandingState::LoadBF(LoadBF::new(rect.clone(), ())),
+      state: LandingState::Selection(LandingSelection {
+        buttons: button_grid(rect),
+      }),
     }
   }
   async fn draw(&self) {

@@ -79,6 +79,31 @@ impl<T> Entity<T> {
   }
 }
 
+impl ActiveEntity {
+  pub fn can_shoot(&self) -> bool {
+    self.gun_damage > 0
+  }
+  pub fn can_move(&self) -> bool {
+    self.movement_type == MovementType::Walk
+  }
+  pub fn get_drill_damage(&self) -> usize {
+    self.drill_damage
+  }
+  pub fn get_gun_damage(&self) -> usize {
+    self.gun_damage
+  }
+  pub fn has_copper(&self) -> bool {
+    self.materials.copper > 0
+  }
+  pub fn swap_teams(&mut self) {
+    self.team = match self.team {
+      Team::Blue => Team::Red,
+      Team::Red => Team::Blue,
+      _ => unimplemented!(),
+    }
+  }
+}
+
 pub type Half = [u8; NUM_SUB_ENTITIES];
 
 pub type Code = Vec<u8>;
@@ -237,8 +262,8 @@ impl TryFrom<Entity<Mix>> for Entity<Full> {
 }
 
 impl TemplateEntity {
-  pub fn upgrade(self, tokens: usize, team: Team, pos: Pos) -> FullEntity {
-    FullEntity {
+  pub fn upgrade(self, tokens: usize, team: Team, pos: Pos) -> ActiveEntity {
+    ActiveEntity {
       tokens,
       team,
       pos,
@@ -249,30 +274,56 @@ impl TemplateEntity {
       gun_damage: self.gun_damage,
       drill_damage: self.drill_damage,
       message: self.message,
-      brain: self.brain,
+      brain: Some(self.brain),
     }
   }
 }
 
-pub fn max_weight(body: &FullEntity) -> usize {
+pub fn max_weight(body: &TemplateEntity) -> usize {
   let mut result = 0;
   result += body.hp;
   result += body.inventory_size;
   result
 }
 
-pub fn cost(body: &FullEntity) -> Materials {
-  let w = max_weight(&body);
-  let mut result = body.materials.clone();
-  result.carbon += body.hp * body.hp;
-  result.carbon += body.inventory_size * body.inventory_size;
-  match body.movement_type {
+pub fn cost(template: &TemplateEntity) -> Materials {
+  let w = max_weight(&template);
+  let mut result = template.materials.clone();
+  result.carbon += template.hp * template.hp;
+  result.carbon += template.inventory_size * template.inventory_size;
+  match template.movement_type {
     MovementType::Still => {}
     MovementType::Walk => result.plutonium += w,
   }
-  result.plutonium += body.drill_damage;
-  result.plutonium += body.gun_damage * body.gun_damage;
-  result.plutonium += body.brain.gas / 10 + 1;
+  result.plutonium += template.drill_damage;
+  result.plutonium += template.gun_damage * template.gun_damage;
+  result.plutonium += template.brain.gas / 10 + 1;
+  // TODO remove this:
+  //result.carbon = 1;
+  //result.plutonium = 1;
+  result
+}
+
+// Delete this version
+pub fn max_weight_full(body: &FullEntity) -> usize {
+  let mut result = 0;
+  result += body.hp;
+  result += body.inventory_size;
+  result
+}
+
+pub fn cost_full(template: &FullEntity) -> Materials {
+  let w = max_weight_full(&template);
+  let mut result = template.materials.clone();
+  result.carbon += template.hp * template.hp;
+  result.carbon += template.inventory_size * template.inventory_size;
+  match template.movement_type {
+    MovementType::Still => {}
+    MovementType::Walk => result.plutonium += w,
+  }
+  result.plutonium += template.drill_damage;
+  result.plutonium += template.gun_damage * template.gun_damage;
+  result.plutonium += template.brain.gas / 10 + 1;
   // TODO remove this:
   //result.carbon = 1;
   //result.plutonium = 1;

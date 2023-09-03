@@ -5,7 +5,7 @@ use std::cmp::max;
 use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
-use super::entity::{cost, Code, FullEntity, Message, Team, TemplateEntity};
+use super::entity::{cost, ActiveEntity, Code, FullEntity, Message, Team, TemplateEntity};
 use super::geometry::{
   add_displace, is_within_bounds_signed, Direction, Displace, GeometryError, Neighbor, Pos,
 };
@@ -36,7 +36,7 @@ pub struct State {
   pub red_tokens: usize,
   blue_codes: [Option<Code>; NUM_CODES],
   red_codes: [Option<Code>; NUM_CODES],
-  pub entities: HashMap<Id, FullEntity>,
+  pub entities: HashMap<Id, ActiveEntity>,
   next_unique_id: usize,
   pub blue_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
   red_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
@@ -106,7 +106,7 @@ impl State {
     min_tokens: usize,
     blue_codes: [Option<Code>; NUM_CODES],
     red_codes: [Option<Code>; NUM_CODES],
-    entities: HashMap<Id, FullEntity>,
+    entities: HashMap<Id, ActiveEntity>,
     blue_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
     red_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
     tiles: Vec<Tile>,
@@ -171,13 +171,11 @@ impl State {
   pub fn construct_entity(
     &mut self,
     entity_id: usize,
-    creature: FullEntity,
+    creature: TemplateEntity,
     template: usize,
+    pos: Pos,
   ) -> Result<(), StateError> {
-    ensure!(
-      !self.has_entity(creature.pos),
-      OccupiedTileSnafu { pos: creature.pos }
-    );
+    ensure!(!self.has_entity(pos), OccupiedTileSnafu { pos: pos });
     let entity = self.get_mut_entity_by_id(entity_id)?;
     let constr_cost = cost(&creature);
     ensure!(
@@ -189,7 +187,7 @@ impl State {
     );
     entity.materials -= constr_cost;
     let team = entity.team;
-    self.build_entity_from_template(team, 0, template, creature.pos)
+    self.build_entity_from_template(team, 0, template, pos)
   }
   pub fn remove_entity(&mut self, pos: Pos) -> Result<(), StateError> {
     let id = self.tiles[pos.to_index()]
@@ -211,33 +209,33 @@ impl State {
     self.tiles[pos.to_index()].entity_id = None;
     Ok(())
   }
-  pub fn get_entity(&self, pos: Pos) -> Result<&FullEntity, StateError> {
+  pub fn get_entity(&self, pos: Pos) -> Result<&ActiveEntity, StateError> {
     let id = self
       .get_tile(pos)
       .entity_id
       .ok_or(StateError::EmptyTile { pos })?;
     Ok(self.entities.get(&id).unwrap())
   }
-  pub fn get_entity_by_id(&self, id: Id) -> Result<&FullEntity, StateError> {
+  pub fn get_entity_by_id(&self, id: Id) -> Result<&ActiveEntity, StateError> {
     self
       .entities
       .get(&id)
       .ok_or(StateError::NoEntityWithId { id })
   }
-  pub fn get_mut_entity_by_id(&mut self, id: Id) -> Result<&mut FullEntity, StateError> {
+  pub fn get_mut_entity_by_id(&mut self, id: Id) -> Result<&mut ActiveEntity, StateError> {
     self
       .entities
       .get_mut(&id)
       .ok_or(StateError::NoEntityWithId { id })
   }
-  pub fn get_entity_option(&self, pos: Pos) -> Option<&FullEntity> {
+  pub fn get_entity_option(&self, pos: Pos) -> Option<&ActiveEntity> {
     let id = self.get_tile(pos).entity_id;
     match id {
       None => None,
       Some(i) => Some(self.entities.get(&i).unwrap()),
     }
   }
-  pub fn get_mut_entity(&mut self, pos: Pos) -> Result<&mut FullEntity, StateError> {
+  pub fn get_mut_entity(&mut self, pos: Pos) -> Result<&mut ActiveEntity, StateError> {
     let id = self
       .get_tile(pos)
       .entity_id
@@ -383,11 +381,9 @@ impl State {
       }
       Verb::Construct(template, dir) => {
         let from = entity.pos.clone();
-        let pos = State::add_displace(from, &Displace::from(dir))?;
-        let creature = self
-          .get_creature(entity.team, template)
-          .map(|t| t.upgrade(0, entity.team, pos))?;
-        self.construct_entity(command.entity_id, creature, template)?;
+        let to = State::add_displace(from, &Displace::from(dir))?;
+        let creature = self.get_creature(entity.team, template)?;
+        self.construct_entity(command.entity_id, creature, template, to)?;
       }
       _ => {}
     };
