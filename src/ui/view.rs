@@ -266,26 +266,26 @@ impl Ui for View {
     draw_text(format!("FPS: {}", get_fps()).as_str(), 0., 16., 32., WHITE);
     draw_text(
       format!("Blue Tokens: {}", &self.state.blue_tokens).as_str(),
-      1200.,
-      16.,
+      200.,
+      36.,
       32.,
       WHITE,
     );
     draw_text(
       format!("Red_Tokens: {}", &self.state.red_tokens).as_str(),
-      1200.,
-      116.,
+      200.,
+      96.,
       32.,
       WHITE,
     );
     draw_text(
       format!(
-        "St: {:?}, min {}",
+        "Game status: {:?}, min tokens {}",
         &self.state.game_status, self.state.min_tokens
       )
       .as_str(),
-      1200.,
-      216.,
+      200.,
+      156.,
       32.,
       WHITE,
     );

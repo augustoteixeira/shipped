@@ -190,15 +190,21 @@ pub fn build_state(level: &BFState, blue: &BFState, red: &BFState) -> State {
       .collect(),
   );
   for pos in half_board_iterator() {
-    if let Some(e) = joined_tiles[pos.to_index()].entity_id {
+    if let Some(id) = joined_tiles[pos.to_index()].entity_id {
       state
-        .build_entity_from_template(Team::Blue, 1, e, pos)
+        .build_entity_from_template(Team::Blue, 1, id, pos)
         .unwrap();
+      if let EntityState::Entity(e, _) = &blue.entities[id] {
+        state.get_mut_entity(pos).unwrap().tokens = e.tokens;
+      }
     }
-    if let Some(e) = joined_tiles[pos.invert().to_index()].entity_id {
+    if let Some(id) = joined_tiles[pos.invert().to_index()].entity_id {
       state
-        .build_entity_from_template(Team::Red, 1, e, pos.invert())
+        .build_entity_from_template(Team::Red, 1, id, pos.invert())
         .unwrap();
+      if let EntityState::Entity(e, _) = &red.entities[id] {
+        state.get_mut_entity(pos.invert()).unwrap().tokens = e.tokens;
+      }
     }
   }
   state
