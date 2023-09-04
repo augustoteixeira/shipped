@@ -6,11 +6,8 @@ use futures::executor::block_on;
 use macroquad::prelude::*;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
-//use serde::{Deserialize, Serialize};
-//use std::path::Path;
 
 use super::canvas::{draw_floor, draw_mat_map, draw_materials, draw_template_at};
-//use super::entity_edit::{EntityEdit, EntityEditCommand};
 use super::new_bf::NewBF;
 use super::ui::{
   build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
