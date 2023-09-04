@@ -10,12 +10,12 @@ use super::ui::{
 };
 use crate::state::bf::EntityState;
 use crate::state::constants::NUM_TEMPLATES;
-use crate::state::entity::{Full, Mix, MixEntity, MovementType};
+use crate::state::entity::{Full, Mix, MixTemplate, MovementType};
 
 #[derive(Clone, Debug)]
 pub enum EntityEditCommand {
-  RequestChange(MixEntity),
-  Exit(MixEntity),
+  RequestChange(MixTemplate),
+  Exit(MixTemplate),
 }
 
 #[derive(Clone, Debug)]

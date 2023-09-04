@@ -10,7 +10,7 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 
-use super::canvas::{draw_entity, draw_floor, draw_mat_map};
+use super::canvas::{draw_floor, draw_mat_map, draw_template_at};
 use super::entity_edit::{EntityEdit, EntityEditCommand};
 use super::ui::{build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect, Ui};
 use crate::state::bf::{join_tiles, BFState, EntityState, MatName, ValidationError};
@@ -415,24 +415,9 @@ impl Ui for NewBF {
     for pos in half_board_iterator() {
       if let Some(id) = &self.state.get_tiles()[pos.to_index()].entity_id {
         if let EntityState::Entity(e, _) = &self.state.get_entities()[*id] {
-          draw_entity(
-            Some(&e.clone().try_into().unwrap()),
-            XDISPL,
-            YDISPL,
-            pos,
-            &self.tileset,
-          )
-          .await;
-          let mut f = e.clone();
-          f.team = Team::Red;
-          draw_entity(
-            Some(&f.try_into().unwrap()),
-            XDISPL,
-            YDISPL,
-            Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
-            &self.tileset,
-          )
-          .await;
+          draw_template_at(&e.clone(), XDISPL, YDISPL, pos, Team::Blue, &self.tileset).await;
+          let f = e.clone();
+          draw_template_at(&f, XDISPL, YDISPL, pos.invert(), Team::Red, &self.tileset).await;
         }
       }
     }

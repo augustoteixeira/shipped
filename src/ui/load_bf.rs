@@ -9,7 +9,7 @@ use rand_chacha::ChaCha8Rng;
 //use serde::{Deserialize, Serialize};
 //use std::path::Path;
 
-use super::canvas::{draw_entity, draw_floor, draw_mat_map, draw_materials};
+use super::canvas::{draw_floor, draw_mat_map, draw_materials, draw_template_at};
 //use super::entity_edit::{EntityEdit, EntityEditCommand};
 use super::new_bf::NewBF;
 use super::ui::{
@@ -19,7 +19,7 @@ use super::view::{PlayState, View, ViewState};
 use crate::state::bf::{join_tiles, load_level_file, load_squad_file, BFState, EntityState};
 use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::Team;
-use crate::state::geometry::{board_iterator, half_board_iterator, Pos};
+use crate::state::geometry::{board_iterator, half_board_iterator};
 use crate::state::state::Tile;
 
 const SMOKE: macroquad::color::Color = Color::new(0.0, 0.0, 0.0, 0.3);
@@ -244,21 +244,22 @@ impl Ui for LoadBF {
         for pos in half_board_iterator() {
           if let Some(id) = &bf_state.get_tiles()[pos.to_index()].entity_id {
             if let EntityState::Entity(e, _) = &bf_state.get_entities()[*id] {
-              draw_entity(
-                Some(&e.clone().try_into().unwrap()),
+              draw_template_at(
+                &e.clone().try_into().unwrap(),
                 XDISPL,
                 YDISPL,
                 pos,
+                Team::Blue,
                 &self.tileset,
               )
               .await;
-              let mut f = e.clone();
-              f.team = Team::Red;
-              draw_entity(
-                Some(&f.try_into().unwrap()),
+              let f = e.clone();
+              draw_template_at(
+                &f.try_into().unwrap(),
                 XDISPL,
                 YDISPL,
-                Pos::new(WIDTH - pos.x - 1, HEIGHT - pos.y - 1),
+                pos.invert(),
+                Team::Red,
                 &self.tileset,
               )
               .await;
@@ -305,14 +306,16 @@ impl Ui for LoadBF {
             };
             draw_materials(tile.materials.clone(), XDISPL, YDISPL, pos, &self.tileset).await;
             if let EntityState::Entity(e, _) = &mut entity {
-              if pos.is_bottom() {
-                e.swap_teams();
-              }
-              draw_entity(
-                Some(&e.clone().try_into().unwrap()),
+              draw_template_at(
+                &e.clone().try_into().unwrap(),
                 XDISPL,
                 YDISPL,
                 pos,
+                if pos.is_bottom() {
+                  Team::Blue
+                } else {
+                  Team::Red
+                },
                 &self.tileset,
               )
               .await;

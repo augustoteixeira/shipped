@@ -5,7 +5,7 @@ use std::cmp::max;
 use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
-use super::entity::{cost, ActiveEntity, Code, FullEntity, Message, Team, TemplateEntity};
+use super::entity::{cost, ActiveEntity, Code, Message, Team, TemplateEntity};
 use super::geometry::{
   add_displace, is_within_bounds_signed, Direction, Displace, GeometryError, Neighbor, Pos,
 };
@@ -141,6 +141,7 @@ impl State {
       template < NUM_TEMPLATES,
       TemplateOutOfBoundsSnafu { template }
     );
+    println!("\n\n\n{:?}", self.blue_templates);
     match team {
       Team::Blue | Team::BlueGray => self.blue_templates[template].clone(),
       Team::Red | Team::RedGray => self.red_templates[template].clone(),

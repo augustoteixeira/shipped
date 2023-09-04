@@ -39,6 +39,37 @@ pub struct ActiveEntity {
   pub brain: Option<Full>,
 }
 
+pub type Half = [u8; NUM_SUB_ENTITIES];
+
+pub type Code = Vec<u8>;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct Full {
+  pub half: Half,
+  pub code_index: usize,
+  pub gas: usize,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum Mix {
+  Bare,
+  Half(Half),
+  Full(Full),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct MixTemplate {
+  pub tokens: usize,
+  pub hp: usize,
+  pub inventory_size: usize,
+  pub materials: Materials,
+  pub movement_type: MovementType,
+  pub gun_damage: usize,
+  pub drill_damage: usize,
+  pub message: Option<Message>,
+  pub brain: Mix,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Entity<T> {
   pub tokens: usize,
@@ -104,31 +135,13 @@ impl ActiveEntity {
   }
 }
 
-pub type Half = [u8; NUM_SUB_ENTITIES];
-
-pub type Code = Vec<u8>;
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Full {
-  pub half: Half,
-  pub code_index: usize,
-  pub gas: usize,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum Mix {
-  Bare,
-  Half(Half),
-  Full(Full),
-}
-
 pub type BareEntity = Entity<()>;
 pub type HalfEntity = Entity<Half>;
 pub type FullEntity = Entity<Full>;
 pub type MixEntity = Entity<Mix>;
 
 #[rustfmt::skip]
-pub fn same_bare<T, S> (a: &Entity<T>, b: &Entity<S>) -> bool {
+pub fn same_bare (a: &MixTemplate, b: &MixTemplate) -> bool {
   if a.tokens != b.tokens { return false; }
   if a.hp != b.hp { return false; }
   if a.inventory_size != b.inventory_size { return false; }
@@ -139,21 +152,21 @@ pub fn same_bare<T, S> (a: &Entity<T>, b: &Entity<S>) -> bool {
   return true;
 }
 
-impl MixEntity {
+impl MixTemplate {
   #[rustfmt::skip]
-  pub fn compatible(&self, refer: &MixEntity) -> bool {
+  pub fn compatible(&self, refer: &MixTemplate) -> bool {
     if !same_bare(self, refer) { return false; }
-    match self {
-      Entity { brain: Mix::Bare, .. } => {
-        if !matches!(refer, Entity { brain: Mix::Bare, .. }) { return false; }
+    match &self.brain {
+      Mix::Bare => {
+        if !matches!(refer.brain,Mix::Bare) { return false; }
       }
-      Entity { brain: Mix::Half(h), .. } => {
-        if matches!(refer, Entity { brain: Mix::Full(_), .. }) { return false; }
+      Mix::Half(h) => {
+        if matches!(refer.brain, Mix::Full(_)) { return false; }
         if let Mix::Half(h2) = refer.brain {
           if *h != h2 { return false; }
         }
       }
-      Entity { brain: Mix::Full(f), .. } => {
+      Mix::Full(f) => {
         if let Mix::Half(h) = refer.brain {
           if f.half != h { return false; }
         }
@@ -179,7 +192,7 @@ pub struct TemplateEntity {
   pub gun_damage: usize,
   pub drill_damage: usize,
   pub message: Option<Message>,
-  pub brain: Full,
+  pub brain: Option<Full>,
 }
 
 impl TryFrom<MixEntity> for TemplateEntity {
@@ -194,29 +207,66 @@ impl TryFrom<MixEntity> for TemplateEntity {
         gun_damage: mix.gun_damage,
         drill_damage: mix.drill_damage,
         message: None,
-        brain: f,
+        brain: Some(f),
       }),
-      // Mix::Half(h) => Ok(TemplateEntity {
-      //   hp: mix.hp,
-      //   inventory_size: mix.inventory_size,
-      //   materials: mix.materials,
-      //   movement_type: mix.movement_type,
-      //   gun_damage: mix.gun_damage,
-      //   drill_damage: mix.drill_damage,
-      //   message: None,
-      //     brain: Full{half: h, code_index: 0, },
-      // }),
-      // Mix::Full(f) => Ok(TemplateEntity {
-      //   hp: mix.hp,
-      //   inventory_size: mix.inventory_size,
-      //   materials: mix.materials,
-      //   movement_type: mix.movement_type,
-      //   gun_damage: mix.gun_damage,
-      //   drill_damage: mix.drill_damage,
-      //   message: None,
-      //   brain: f,
-      // }),
-      _ => Err("Cannot convert to template"),
+      Mix::Half(_) => Ok(TemplateEntity {
+        hp: mix.hp,
+        inventory_size: mix.inventory_size,
+        materials: mix.materials,
+        movement_type: mix.movement_type,
+        gun_damage: mix.gun_damage,
+        drill_damage: mix.drill_damage,
+        message: None,
+        brain: None,
+      }),
+      Mix::Bare => Ok(TemplateEntity {
+        hp: mix.hp,
+        inventory_size: mix.inventory_size,
+        materials: mix.materials,
+        movement_type: mix.movement_type,
+        gun_damage: mix.gun_damage,
+        drill_damage: mix.drill_damage,
+        message: None,
+        brain: None,
+      }),
+    }
+  }
+}
+
+impl TryFrom<MixTemplate> for TemplateEntity {
+  type Error = &'static str;
+  fn try_from(mix: MixTemplate) -> Result<Self, Self::Error> {
+    match mix.brain {
+      Mix::Full(f) => Ok(TemplateEntity {
+        hp: mix.hp,
+        inventory_size: mix.inventory_size,
+        materials: mix.materials,
+        movement_type: mix.movement_type,
+        gun_damage: mix.gun_damage,
+        drill_damage: mix.drill_damage,
+        message: None,
+        brain: Some(f),
+      }),
+      Mix::Half(_) => Ok(TemplateEntity {
+        hp: mix.hp,
+        inventory_size: mix.inventory_size,
+        materials: mix.materials,
+        movement_type: mix.movement_type,
+        gun_damage: mix.gun_damage,
+        drill_damage: mix.drill_damage,
+        message: None,
+        brain: None,
+      }),
+      Mix::Bare => Ok(TemplateEntity {
+        hp: mix.hp,
+        inventory_size: mix.inventory_size,
+        materials: mix.materials,
+        movement_type: mix.movement_type,
+        gun_damage: mix.gun_damage,
+        drill_damage: mix.drill_damage,
+        message: None,
+        brain: None,
+      }),
     }
   }
 }
@@ -261,6 +311,44 @@ impl TryFrom<Entity<Mix>> for Entity<Full> {
   }
 }
 
+// impl From<MixTemplate> for Entity<Full> {
+//   fn from(mix: MixTemplate) -> Self {
+//     if let Mix::Full(f) = mix.brain {
+//       return Ok(FullEntity {
+//         tokens: mix.tokens,
+//         team: mix.team,
+//         pos: mix.pos,
+//         hp: mix.hp,
+//         inventory_size: mix.inventory_size,
+//         materials: mix.materials,
+//         movement_type: mix.movement_type,
+//         gun_damage: mix.gun_damage,
+//         drill_damage: mix.drill_damage,
+//         message: mix.message,
+//         brain: f,
+//       });
+//     } else {
+//       return Ok(FullEntity {
+//         tokens: mix.tokens,
+//         team: mix.team,
+//         pos: mix.pos,
+//         hp: mix.hp,
+//         inventory_size: mix.inventory_size,
+//         materials: mix.materials,
+//         movement_type: mix.movement_type,
+//         gun_damage: mix.gun_damage,
+//         drill_damage: mix.drill_damage,
+//         message: mix.message,
+//         brain: Full {
+//           half: [0, 0],
+//           code_index: 0,
+//           gas: 0,
+//         },
+//       });
+//     }
+//   }
+// }
+
 impl TemplateEntity {
   pub fn upgrade(self, tokens: usize, team: Team, pos: Pos) -> ActiveEntity {
     ActiveEntity {
@@ -274,7 +362,7 @@ impl TemplateEntity {
       gun_damage: self.gun_damage,
       drill_damage: self.drill_damage,
       message: self.message,
-      brain: Some(self.brain),
+      brain: self.brain,
     }
   }
 }
@@ -297,7 +385,7 @@ pub fn cost(template: &TemplateEntity) -> Materials {
   }
   result.plutonium += template.drill_damage;
   result.plutonium += template.gun_damage * template.gun_damage;
-  result.plutonium += template.brain.gas / 10 + 1;
+  //result.plutonium += template.brain.gas / 10 + 1;
   // TODO remove this:
   //result.carbon = 1;
   //result.plutonium = 1;
@@ -324,6 +412,32 @@ pub fn cost_full(template: &FullEntity) -> Materials {
   result.plutonium += template.drill_damage;
   result.plutonium += template.gun_damage * template.gun_damage;
   result.plutonium += template.brain.gas / 10 + 1;
+  // TODO remove this:
+  //result.carbon = 1;
+  //result.plutonium = 1;
+  result
+}
+
+// Delete this version
+pub fn max_weight_template(body: &MixTemplate) -> usize {
+  let mut result = 0;
+  result += body.hp;
+  result += body.inventory_size;
+  result
+}
+
+pub fn cost_template(template: &MixTemplate) -> Materials {
+  let w = max_weight_template(&template);
+  let mut result = template.materials.clone();
+  result.carbon += template.hp * template.hp;
+  result.carbon += template.inventory_size * template.inventory_size;
+  match template.movement_type {
+    MovementType::Still => {}
+    MovementType::Walk => result.plutonium += w,
+  }
+  result.plutonium += template.drill_damage;
+  result.plutonium += template.gun_damage * template.gun_damage;
+  //result.plutonium += template.brain.gas / 10 + 1;
   // TODO remove this:
   //result.carbon = 1;
   //result.plutonium = 1;

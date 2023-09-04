@@ -11,9 +11,9 @@ use std::path::Path;
 
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::{
-  cost_full, ActiveEntity, FullEntity, Mix, MixEntity, MovementType, Team, TemplateEntity,
+  cost_template, ActiveEntity, Mix, MixTemplate, MovementType, Team, TemplateEntity,
 };
-use crate::state::geometry::{board_iterator, half_board_iterator, Pos};
+use crate::state::geometry::{half_board_iterator, Pos};
 use crate::state::materials::Materials;
 use crate::state::state::{Id, State, Tile};
 
@@ -28,7 +28,7 @@ pub enum MatName {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EntityState {
   Empty,
-  Entity(MixEntity, usize),
+  Entity(MixTemplate, usize),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -313,10 +313,8 @@ impl BFState {
   pub fn initialize_bot(&mut self, index: usize) -> Result<(), UpdateError> {
     if let EntityState::Empty = self.entities[index] {
       self.entities[index] = EntityState::Entity(
-        MixEntity {
+        MixTemplate {
           tokens: 0,
-          team: Team::Blue,
-          pos: Pos::new(0, 0),
           hp: 1,
           inventory_size: 0,
           materials: Materials {
@@ -339,7 +337,7 @@ impl BFState {
     Ok(())
   }
 
-  pub fn update_bot(&mut self, index: usize, entity: MixEntity) -> Result<(), UpdateError> {
+  pub fn update_bot(&mut self, index: usize, entity: MixTemplate) -> Result<(), UpdateError> {
     match &mut self.entities[index] {
       EntityState::Empty => {
         return Err(UpdateError::EmptyBot { index });
@@ -441,7 +439,7 @@ impl BFState {
       EntityState::Entity(e, j) => {
         if *j > 0 {
           *j -= 1;
-          self.materials += cost_full(&FullEntity::try_from(e.clone()).unwrap());
+          self.materials += cost_template(&e);
           let tokens = e.tokens;
           self.add_tokens(tokens);
           return Ok(());
@@ -458,7 +456,7 @@ impl BFState {
         return Err(UpdateError::EmptyBot { index });
       }
       EntityState::Entity(e, j) => {
-        if !(self.materials >= cost_full(&FullEntity::try_from(e.clone()).unwrap())) {
+        if !(self.materials >= cost_template(&e)) {
           return Err(UpdateError::NoMaterialToBuyBot { index });
         } else {
           let entity = e.clone();
@@ -467,7 +465,7 @@ impl BFState {
           } else {
             *j += 1;
             self.try_sub_tokens(entity.tokens)?;
-            self.materials -= cost_full(&FullEntity::try_from(entity).unwrap());
+            self.materials -= cost_template(&entity);
             return Ok(());
           }
         }
@@ -526,7 +524,7 @@ impl BFState {
             num_entities += 1;
           }
         }
-        let mut entities_cost = cost_full(&FullEntity::try_from(e.clone()).unwrap());
+        let mut entities_cost = cost_template(&e);
         entities_cost.carbon *= num_entities;
         entities_cost.silicon *= num_entities;
         entities_cost.plutonium *= num_entities;
@@ -556,7 +554,7 @@ impl BFState {
         EntityState::Empty => {}
         EntityState::Entity(e, k) => {
           entities[i] += *k;
-          let mut entities_cost = cost_full(&FullEntity::try_from(e.clone()).unwrap());
+          let mut entities_cost = cost_template(&e);
           entities_cost.carbon *= entities[i];
           entities_cost.silicon *= entities[i];
           entities_cost.plutonium *= entities[i];

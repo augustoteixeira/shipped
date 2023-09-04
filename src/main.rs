@@ -35,11 +35,11 @@ fn random_entity(rng: &mut ChaCha8Rng) -> TemplateEntity {
       emotion: 0,
       pos: Pos::new(0, 0),
     }),
-    brain: Full {
+    brain: Some(Full {
       half: [0, 0],
       code_index: 2,
       gas: 2000,
-    },
+    }),
   }
 }
 
