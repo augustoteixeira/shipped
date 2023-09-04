@@ -148,7 +148,6 @@ pub fn join_tiles(blue: &BFState, red: &BFState) -> Vec<Tile> {
 pub fn build_state(level: &BFState, blue: &BFState, red: &BFState) -> State {
   assert!(blue.is_compatible(level).unwrap());
   assert!(red.is_compatible(level).unwrap());
-  println!("{:?}", blue.entities);
   let joined_tiles = join_tiles(&blue, &red);
 
   let mut state = State::new(
@@ -190,7 +189,6 @@ pub fn build_state(level: &BFState, blue: &BFState, red: &BFState) -> State {
       })
       .collect(),
   );
-  println!("{:?}", state.blue_templates);
   for pos in half_board_iterator() {
     if let Some(e) = joined_tiles[pos.to_index()].entity_id {
       state

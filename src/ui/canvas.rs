@@ -3,7 +3,7 @@ use macroquad::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::constants::{HEIGHT, WIDTH};
-use crate::state::entity::{ActiveEntity, FullEntity, MixTemplate, MovementType, Team};
+use crate::state::entity::{ActiveEntity, MixTemplate, MovementType, Team};
 use crate::state::geometry::{board_iterator, Pos};
 use crate::state::materials::Materials;
 use crate::state::state::{State, Tile};
@@ -92,7 +92,7 @@ pub async fn draw_materials(
 }
 
 pub async fn draw_entity(
-  entity: Option<&FullEntity>,
+  entity: Option<&ActiveEntity>,
   h_displace: f32,
   v_displace: f32,
   pos: Pos,
@@ -216,7 +216,7 @@ pub async fn draw_active_entity(
   }
 }
 
-fn get_texture_x(e: &FullEntity) -> f32 {
+fn get_texture_x(e: &ActiveEntity) -> f32 {
   let inventory = e.inventory_size;
   let can_walk = e.movement_type == MovementType::Walk;
   let can_drill = e.drill_damage > 0;
