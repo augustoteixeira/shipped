@@ -70,6 +70,7 @@ pub async fn draw_centered_text(rect: &Rect, text: &str) {
 pub enum Input {
   Key(KeyCode),
   Click(MouseButton, (f32, f32)),
+  Tick,
 }
 
 pub fn get_input() -> Option<Input> {

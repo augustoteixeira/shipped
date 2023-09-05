@@ -12,7 +12,7 @@ pub mod ui;
 
 use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::state::{Command, GameStatus, Script, State, StateError, Verb};
-use crate::ui::canvas::{draw_ent_map, draw_floor, draw_mat_map};
+use crate::ui::canvas::{draw_entity_map, draw_floor, draw_mat_map};
 
 const HOR_DISPLACE: f32 = 150.;
 const VER_DISPLACE: f32 = 25.;
@@ -104,7 +104,7 @@ async fn main() -> std::io::Result<()> {
     clear_background(GRAY);
     draw_floor(HOR_DISPLACE, VER_DISPLACE, &tileset, &floor).await;
     draw_mat_map(&state.tiles, HOR_DISPLACE, VER_DISPLACE, &tileset).await;
-    draw_ent_map(&state, HOR_DISPLACE, VER_DISPLACE, &tileset).await;
+    draw_entity_map(&state, HOR_DISPLACE, VER_DISPLACE, &tileset).await;
     draw_text(format!("FPS: {}", get_fps()).as_str(), 0., 16., 32., WHITE);
     draw_text(
       format!("Blue Tokens: {}", state.blue_tokens).as_str(),

@@ -311,7 +311,7 @@ pub async fn draw_mat_map(
   }
 }
 
-pub async fn draw_ent_map(state: &State, h_displace: f32, v_displace: f32, tileset: &Texture2D) {
+pub async fn draw_entity_map(state: &State, h_displace: f32, v_displace: f32, tileset: &Texture2D) {
   for pos in board_iterator() {
     draw_active_entity(
       state.get_entity_option(pos),

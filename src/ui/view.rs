@@ -13,12 +13,13 @@ use crate::state::bf::{build_state, load_level_file, load_squad_file, BFState};
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::geometry::{Direction, Displace, Neighbor};
 use crate::state::materials::Materials;
-use crate::state::state::{Command as StateCommand, Frame, Script, State, StateError, Verb};
-use crate::ui::canvas::{draw_ent_map, draw_floor, draw_mat_map};
+use crate::state::state::{
+  Command as StateCommand, Frame, GameStatus, Script, State, StateError, Verb,
+};
+use crate::ui::canvas::{draw_entity_map, draw_floor, draw_mat_map};
 
 const XDISPL: f32 = 800.0;
 const YDISPL: f32 = 30.0;
-const FRAME_TIME: f64 = 0.05;
 
 fn random_material(rng: &mut ChaCha8Rng) -> Materials {
   let material_type = rng.gen_range(0..4);
@@ -118,6 +119,7 @@ async fn draw_command(state: &State, command: &StateCommand) -> Result<(), State
 #[derive(Debug, Clone)]
 pub enum PlayState {
   Paused,
+  Playing(f64, f64),
 }
 
 #[derive(Clone, Debug)]
@@ -125,7 +127,6 @@ pub struct ViewState {
   pub level: usize,
   pub blue_squad_number: usize,
   pub red_squad_number: usize,
-  pub seconds: f64,
   pub current_frame: usize,
   pub finished: bool,
   pub play_state: PlayState,
@@ -145,25 +146,36 @@ pub struct View {
 #[derive(Clone, Debug)]
 pub enum Command {
   Exit,
+  Play,
 }
 
 impl View {
   fn build_panel(&self, rect: &Rect) -> ButtonPanel<Command> {
     let mut panel: ButtonPanel<Command> =
       ButtonPanel::new(rect.clone(), (vec![], vec![], vec![], vec![], vec![]));
+    let rects: Vec<Rect> = split(
+      &trim_margins(rect.clone(), 0.2, 0.2, 0.2, 0.2),
+      vec![0.0, 1.0],
+      vec![0.0, 0.6, 0.8, 1.0],
+    )
+    .into_iter()
+    .map(|r| trim_margins(r, 0.1, 0.1, 0.1, 0.1))
+    .collect();
     match &self.view_state.play_state {
       PlayState::Paused => {
-        let rects: Vec<Rect> = split(
-          &trim_margins(rect.clone(), 0.2, 0.2, 0.2, 0.2),
-          vec![0.0, 1.0],
-          vec![0.0, 0.6, 0.8, 1.0],
-        )
-        .into_iter()
-        .map(|r| trim_margins(r, 0.1, 0.1, 0.1, 0.1))
-        .collect();
         panel.push(Button::<Command>::new(
           rects[1].clone(),
-          ("Start".to_string(), Command::Exit, false, false),
+          ("Start".to_string(), Command::Play, false, false),
+        ));
+        panel.push(Button::<Command>::new(
+          rects[2].clone(),
+          ("Quit".to_string(), Command::Exit, false, false),
+        ));
+      }
+      PlayState::Playing(_, _) => {
+        panel.push(Button::<Command>::new(
+          rects[1].clone(),
+          ("Pause".to_string(), Command::Exit, false, false),
         ));
         panel.push(Button::<Command>::new(
           rects[2].clone(),
@@ -254,15 +266,15 @@ impl Ui for View {
   }
 
   async fn draw(&self) {
-    match &self.view_state.play_state {
-      PlayState::Paused => {
-        self.panel.draw().await;
-      }
-    }
+    //match &self.view_state.play_state {
+    //  PlayState::Paused => {
+    self.panel.draw().await;
+    //  }
+    //}
 
     draw_floor(XDISPL, YDISPL, &self.tileset, &self.floor).await;
     draw_mat_map(&self.state.tiles, XDISPL, YDISPL, &self.tileset).await;
-    draw_ent_map(&self.state, XDISPL, YDISPL, &self.tileset).await;
+    draw_entity_map(&self.state, XDISPL, YDISPL, &self.tileset).await;
     draw_text(format!("FPS: {}", get_fps()).as_str(), 0., 16., 32., WHITE);
     draw_text(
       format!("Blue Tokens: {}", &self.state.blue_tokens).as_str(),
@@ -289,21 +301,6 @@ impl Ui for View {
       32.,
       WHITE,
     );
-    // // update
-    // if (get_time() > self.view_state.seconds + FRAME_TIME)
-    //   & (self.state.game_status == GameStatus::Running)
-    // {
-    //   self.view_state.seconds += FRAME_TIME;
-    //   if let Some(f) = self.frames.get(self.view_state.current_frame) {
-    //     for command in f.iter() {
-    //       if self.state.execute_command(command.clone()).is_ok() {
-    //         let _ = draw_command(&self.state, command).await;
-    //       }
-    //     }
-    //   } else {
-    //     self.view_state.finished = true;
-    //   }
-    // }
   }
   fn process_input(&mut self, input: Input) -> Option<()> {
     match &mut self.view_state.play_state {
@@ -313,8 +310,25 @@ impl Ui for View {
         }
         match self.panel.process_input(input) {
           Some(Command::Exit) => return Some(()),
-          _ => {}
+          Some(Command::Play) => self.view_state.play_state = PlayState::Playing(get_time(), 0.01),
+          None => {}
         }
+      }
+      PlayState::Playing(seconds, rate) => {
+        if (get_time() > *seconds + *rate) & (self.state.game_status == GameStatus::Running) {
+          *seconds += *rate;
+          if let Some(f) = self.frames.get(self.view_state.current_frame) {
+            self.view_state.current_frame += 1;
+            for command in f.iter() {
+              if self.state.execute_command(command.clone()).is_ok() {
+                //let _ = draw_command(&self.state, command).await;
+              }
+            }
+          } else {
+            self.view_state.finished = true;
+          }
+        }
+        return None;
       }
     }
     self.update_main_panel();
