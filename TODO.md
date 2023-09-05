@@ -1,5 +1,5 @@
-Add Coding
-----------
+Add WASM Coding
+---------------
 
 - add random code to bots through a closure
 - add external functions that the bot's code can access
@@ -9,10 +9,9 @@ Add Coding
 UI
 --
 
-- add interface to view a game between two saved squads
+- add +- 10 to incrementers with right click
 
 Code quality
 ------------
 
-- make tokens be part of template (see `build_entity_from_template` in `state/state`)
-- make pre-entity (no position, no hp, no team...) for map edition
+- review

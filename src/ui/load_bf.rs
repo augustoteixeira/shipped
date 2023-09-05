@@ -12,7 +12,7 @@ use super::new_bf::NewBF;
 use super::ui::{
   build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
 };
-use super::view::{PlayState, View, ViewState};
+use super::view::{View, ViewState};
 use crate::state::bf::{join_tiles, load_level_file, load_squad_file, BFState, EntityState};
 use crate::state::constants::{HEIGHT, WIDTH};
 use crate::state::entity::Team;
@@ -217,7 +217,8 @@ impl Ui for LoadBF {
           red_squad_number: 0,
           current_frame: 0,
           finished: false,
-          play_state: PlayState::Paused,
+          seconds: 0.0,
+          speed: 0,
         },
       )),
       floor,
@@ -432,7 +433,8 @@ impl Ui for LoadBF {
               red_squad_number: 0,
               current_frame: 0,
               finished: false,
-              play_state: PlayState::Paused,
+              seconds: 0.0,
+              speed: 0,
             },
           ));
         }

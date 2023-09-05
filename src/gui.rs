@@ -7,7 +7,7 @@ use macroquad::prelude::*;
 
 const WIN_WIDTH: f32 = 1800.0;
 const WIN_HEIGHT: f32 = 1020.0;
-const FRAME_TIME: f64 = 0.005;
+const TICK_PERIOD: f64 = 0.000001;
 
 fn window_conf() -> Conf {
   Conf {
@@ -28,8 +28,8 @@ async fn main() {
     landing.draw().await;
 
     // update
-    if get_time() > seconds + FRAME_TIME {
-      seconds += FRAME_TIME;
+    if get_time() > seconds + TICK_PERIOD {
+      seconds += TICK_PERIOD;
       match landing.process_input(Input::Tick) {
         Some(LandingCommand::Exit) => {
           break;

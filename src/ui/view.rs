@@ -8,7 +8,7 @@ use futures::executor::block_on;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
-use super::ui::{split, trim_margins, Button, ButtonPanel, Input, Rect, Ui};
+use super::ui::{build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect, Ui};
 use crate::state::bf::{build_state, load_level_file, load_squad_file, BFState};
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::geometry::{Direction, Displace, Neighbor};
@@ -116,12 +116,6 @@ async fn draw_command(state: &State, command: &StateCommand) -> Result<(), State
   }
 }
 
-#[derive(Debug, Clone)]
-pub enum PlayState {
-  Paused,
-  Playing(f64, f64),
-}
-
 #[derive(Clone, Debug)]
 pub struct ViewState {
   pub level: usize,
@@ -129,7 +123,8 @@ pub struct ViewState {
   pub red_squad_number: usize,
   pub current_frame: usize,
   pub finished: bool,
-  pub play_state: PlayState,
+  pub seconds: f64,
+  pub speed: usize,
 }
 
 #[derive(Debug)]
@@ -146,7 +141,8 @@ pub struct View {
 #[derive(Clone, Debug)]
 pub enum Command {
   Exit,
-  Play,
+  Faster,
+  Slower,
 }
 
 impl View {
@@ -161,28 +157,17 @@ impl View {
     .into_iter()
     .map(|r| trim_margins(r, 0.1, 0.1, 0.1, 0.1))
     .collect();
-    match &self.view_state.play_state {
-      PlayState::Paused => {
-        panel.push(Button::<Command>::new(
-          rects[1].clone(),
-          ("Start".to_string(), Command::Play, false, false),
-        ));
-        panel.push(Button::<Command>::new(
-          rects[2].clone(),
-          ("Quit".to_string(), Command::Exit, false, false),
-        ));
-      }
-      PlayState::Playing(_, _) => {
-        panel.push(Button::<Command>::new(
-          rects[1].clone(),
-          ("Pause".to_string(), Command::Exit, false, false),
-        ));
-        panel.push(Button::<Command>::new(
-          rects[2].clone(),
-          ("Quit".to_string(), Command::Exit, false, false),
-        ));
-      }
-    }
+    panel.append(&mut build_incrementer::<Command>(
+      &rects[0],
+      "Speed".to_string(),
+      self.view_state.speed,
+      Command::Faster,
+      Command::Slower,
+    ));
+    panel.push(Button::<Command>::new(
+      rects[2].clone(),
+      ("Quit".to_string(), Command::Exit, false, false),
+    ));
     panel
   }
   fn update_main_panel(&mut self) {
@@ -303,20 +288,30 @@ impl Ui for View {
     );
   }
   fn process_input(&mut self, input: Input) -> Option<()> {
-    match &mut self.view_state.play_state {
-      PlayState::Paused => {
-        if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) = input {
-          return Some(());
+    if let Input::Key(KeyCode::Escape) | Input::Key(KeyCode::Q) = input {
+      return Some(());
+    }
+    match self.panel.process_input(input) {
+      Some(Command::Exit) => return Some(()),
+      Some(Command::Faster) => {
+        if self.view_state.speed == 0 {
+          self.view_state.seconds = get_time();
         }
-        match self.panel.process_input(input) {
-          Some(Command::Exit) => return Some(()),
-          Some(Command::Play) => self.view_state.play_state = PlayState::Playing(get_time(), 0.01),
-          None => {}
-        }
+        self.view_state.speed += 1;
       }
-      PlayState::Playing(seconds, rate) => {
-        if (get_time() > *seconds + *rate) & (self.state.game_status == GameStatus::Running) {
-          *seconds += *rate;
+      Some(Command::Slower) => {
+        self.view_state.speed = self.view_state.speed.saturating_sub(1);
+      }
+      None => {}
+    }
+    loop {
+      if self.view_state.speed > 0 {
+        if (get_time()
+          > self.view_state.seconds
+            + 1.0 / ((self.view_state.speed * self.view_state.speed) as f64))
+          & (self.state.game_status == GameStatus::Running)
+        {
+          self.view_state.seconds += 1.0 / ((self.view_state.speed * self.view_state.speed) as f64);
           if let Some(f) = self.frames.get(self.view_state.current_frame) {
             self.view_state.current_frame += 1;
             for command in f.iter() {
@@ -326,9 +321,14 @@ impl Ui for View {
             }
           } else {
             self.view_state.finished = true;
+
+            return None;
           }
+        } else {
+          break;
         }
-        return None;
+      } else {
+        break;
       }
     }
     self.update_main_panel();
