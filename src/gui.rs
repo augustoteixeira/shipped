@@ -28,7 +28,7 @@ async fn main() {
     landing.draw().await;
 
     // update
-    if (get_time() > seconds + FRAME_TIME) {
+    if get_time() > seconds + FRAME_TIME {
       seconds += FRAME_TIME;
       match landing.process_input(Input::Tick) {
         Some(LandingCommand::Exit) => {
