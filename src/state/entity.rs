@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::constants::NUM_SUB_ENTITIES;
-use super::geometry::Pos;
+use super::geometry::{Direction, Displace, Neighbor, Pos};
 use super::materials::Materials;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -25,6 +25,18 @@ pub enum Team {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum Action {
+  Wait,
+  Move(Direction),
+  GetMaterials(Neighbor, Materials),
+  DropMaterials(Neighbor, Materials),
+  Shoot(Displace),
+  Drill(Direction),
+  Construct(usize, Direction),
+  SetMessage(Message),
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ActiveEntity {
   pub tokens: usize,
   pub team: Team,
@@ -35,7 +47,7 @@ pub struct ActiveEntity {
   pub movement_type: MovementType,
   pub gun_damage: usize,
   pub drill_damage: usize,
-  pub message: Option<Message>,
+  pub last_action: Action,
   pub brain: Option<Full>,
 }
 
@@ -200,7 +212,7 @@ impl TemplateEntity {
       movement_type: self.movement_type,
       gun_damage: self.gun_damage,
       drill_damage: self.drill_damage,
-      message: self.message,
+      last_action: Action::Wait,
       brain: self.brain,
     }
   }
