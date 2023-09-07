@@ -141,7 +141,6 @@ impl State {
       template < NUM_TEMPLATES,
       TemplateOutOfBoundsSnafu { template }
     );
-    println!("\n\n\n{:?}", self.blue_templates);
     match team {
       Team::Blue | Team::BlueGray => self.blue_templates[template].clone(),
       Team::Red | Team::RedGray => self.red_templates[template].clone(),
@@ -160,8 +159,8 @@ impl State {
       .get_creature(team, template)
       .map(|t| t.upgrade(tokens, team, pos))?;
     match team {
-      Team::Blue => self.blue_tokens += entity.tokens,
-      Team::Red => self.red_tokens += entity.tokens,
+      Team::Blue => self.blue_tokens += tokens,
+      Team::Red => self.red_tokens += tokens,
       _ => {}
     };
     self.entities.insert(self.next_unique_id, entity);

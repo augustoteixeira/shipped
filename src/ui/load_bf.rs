@@ -200,27 +200,27 @@ impl Ui for LoadBF {
     // find out if there exists file zero
     let mut load_bf = LoadBF {
       rect: rect.clone(),
-      // state: match load_level_file(0) {
-      //   Some(state) => LoadBFState::Showing(ShowingDetails {
-      //     level: 0,
-      //     level_state: state.clone(),
-      //     has_squads: load_squad_file(0, 0).is_some(),
-      //     joined_tiles: join_tiles(&state, &state),
-      //   }),
-      //   None => LoadBFState::NoFiles,
-      // },
-      state: LoadBFState::View(View::new(
-        rect.clone(),
-        ViewState {
+      state: match load_level_file(0) {
+        Some(state) => LoadBFState::Showing(ShowingDetails {
           level: 0,
-          blue_squad_number: 0,
-          red_squad_number: 0,
-          current_frame: 0,
-          finished: false,
-          seconds: 0.0,
-          speed: 0,
-        },
-      )),
+          level_state: state.clone(),
+          has_squads: load_squad_file(0, 0).is_some(),
+          joined_tiles: join_tiles(&state, &state),
+        }),
+        None => LoadBFState::NoFiles,
+      },
+      // state: LoadBFState::View(View::new(
+      //   rect.clone(),
+      //   ViewState {
+      //     level: 0,
+      //     blue_squad_number: 0,
+      //     red_squad_number: 0,
+      //     current_frame: 0,
+      //     finished: false,
+      //     seconds: 0.0,
+      //     speed: 0,
+      //   },
+      // )),
       floor,
       tileset,
       panel: ButtonPanel::new(rect, (vec![], vec![], vec![], vec![], vec![])),
@@ -425,18 +425,20 @@ impl Ui for LoadBF {
           }
         }
         Some(Command::Start) => {
-          self.state = LoadBFState::View(View::new(
-            self.rect.clone(),
-            ViewState {
-              level: 0,
-              blue_squad_number: 0,
-              red_squad_number: 0,
-              current_frame: 0,
-              finished: false,
-              seconds: 0.0,
-              speed: 0,
-            },
-          ));
+          if let LoadBFState::SelectingSquads(battle) = &self.state {
+            self.state = LoadBFState::View(View::new(
+              self.rect.clone(),
+              ViewState {
+                level: battle.level,
+                blue_squad_number: battle.blue_index,
+                red_squad_number: battle.red_index,
+                current_frame: 0,
+                finished: false,
+                seconds: 0.0,
+                speed: 0,
+              },
+            ));
+          }
         }
         Some(Command::Exit) => {
           return Some(());

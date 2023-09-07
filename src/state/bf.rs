@@ -145,6 +145,7 @@ pub fn join_tiles(blue: &BFState, red: &BFState) -> Vec<Tile> {
   result
 }
 
+// TODO: make this function return errors instead of unwrapping.
 pub fn build_state(level: &BFState, blue: &BFState, red: &BFState) -> State {
   assert!(blue.is_compatible(level).unwrap());
   assert!(red.is_compatible(level).unwrap());
@@ -191,19 +192,29 @@ pub fn build_state(level: &BFState, blue: &BFState, red: &BFState) -> State {
   );
   for pos in half_board_iterator() {
     if let Some(id) = joined_tiles[pos.to_index()].entity_id {
-      state
-        .build_entity_from_template(Team::Blue, 1, id, pos)
-        .unwrap();
-      if let EntityState::Entity(e, _) = &blue.entities[id] {
-        state.get_mut_entity(pos).unwrap().tokens = e.tokens;
+      let blue_entity = blue.entities[id].clone();
+      println!("{}", state.blue_tokens);
+      match blue_entity {
+        EntityState::Empty => unreachable!(),
+        EntityState::Entity(e, _) => {
+          state
+            .build_entity_from_template(Team::Blue, e.tokens, id, pos)
+            .unwrap();
+        }
       }
     }
     if let Some(id) = joined_tiles[pos.invert().to_index()].entity_id {
-      state
-        .build_entity_from_template(Team::Red, 1, id, pos.invert())
-        .unwrap();
-      if let EntityState::Entity(e, _) = &red.entities[id] {
-        state.get_mut_entity(pos.invert()).unwrap().tokens = e.tokens;
+      let red_entity = blue.entities[id].clone();
+      match red_entity {
+        EntityState::Empty => unreachable!(),
+        EntityState::Entity(e, _) => {
+          state
+            .build_entity_from_template(Team::Red, e.tokens, id, pos.invert())
+            .unwrap();
+          if let EntityState::Entity(e, _) = &red.entities[id] {
+            state.get_mut_entity(pos.invert()).unwrap().tokens = e.tokens;
+          }
+        }
       }
     }
   }
