@@ -5,7 +5,7 @@ use std::cmp::max;
 use std::collections::HashMap;
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
-use super::entity::{cost, ActiveEntity, Code, Message, Team, TemplateEntity};
+use super::entity::{cost, Action, ActiveEntity, Code, Message, Team, TemplateEntity};
 use super::geometry::{
   add_displace, is_within_bounds_signed, Direction, Displace, GeometryError, Neighbor, Pos,
 };
@@ -58,7 +58,7 @@ pub enum Verb {
   Shoot(Displace),
   Drill(Direction),
   Construct(usize, Direction),
-  SetMessage(Option<Message>),
+  SetMessage(Message),
 }
 
 #[derive(Debug, Snafu)]
@@ -245,6 +245,14 @@ impl State {
   pub fn get_entities_ids(&self) -> Vec<Id> {
     self.entities.keys().map(|x| *x).collect()
   }
+  pub fn set_entity_action(&mut self, id: Id, action: Action) -> Result<(), StateError> {
+    self
+      .entities
+      .get_mut(&id)
+      .ok_or(StateError::NoEntityWithId { id })?
+      .last_action = action;
+    Ok(())
+  }
   pub fn move_entity(&mut self, from: Pos, to: Pos) -> Result<(), StateError> {
     ensure!(self.has_entity(from), EmptyTileSnafu { pos: from });
     ensure!(!self.has_entity(to), OccupiedTileSnafu { pos: to });
@@ -322,14 +330,9 @@ impl State {
     }
     Ok(())
   }
-  pub fn set_message(&mut self, pos: Pos, message: Option<Message>) -> Result<(), StateError> {
-    let entity = self.get_mut_entity(pos)?;
-    entity.message = message.clone();
-    Ok(())
-  }
   pub fn add_displace(pos: Pos, disp: &Displace) -> Result<Pos, StateError> {
     add_displace(pos, disp).context(DisplaceOutOfBoundsSnafu {
-      pos: pos,
+      pos,
       disp: disp.clone(),
     })
   }
@@ -338,24 +341,29 @@ impl State {
     if self.game_status != GameStatus::Running {
       return Ok(());
     }
-    let entity = self.get_entity_by_id(command.entity_id)?;
+    let entity = self.get_mut_entity_by_id(command.entity_id)?;
     match command.verb {
-      Verb::Wait => return Ok(()),
+      Verb::Wait => {
+        self.set_entity_action(command.entity_id, Action::Wait)?;
+      }
       Verb::AttemptMove(dir) => {
         let from = entity.pos.clone();
         let to = State::add_displace(entity.pos, &Displace::from(dir))?;
         ensure!(entity.can_move(), NoWalkSnafu { pos: entity.pos },);
         self.move_entity(from, to)?;
+        self.set_entity_action(command.entity_id, Action::Move(dir))?;
       }
       Verb::GetMaterials(neigh, load) => {
         let to = entity.pos.clone();
         let from = State::add_displace(entity.pos, &neigh.into())?;
         self.move_material_to_entity(from, to, &load)?;
+        self.set_entity_action(command.entity_id, Action::GetMaterials(neigh, load))?;
       }
       Verb::DropMaterials(neigh, load) => {
         let from = entity.pos.clone();
         let to = State::add_displace(entity.pos, &neigh.into())?;
         self.move_material_to_floor(from, to, &load)?;
+        self.set_entity_action(command.entity_id, Action::DropMaterials(neigh, load))?;
       }
       Verb::Shoot(disp) => {
         let from = entity.pos.clone();
@@ -370,6 +378,7 @@ impl State {
             disp: disp.clone(),
           })?;
         self.attack(to, damage)?;
+        self.set_entity_action(command.entity_id, Action::Shoot(disp))?;
       }
       Verb::Drill(dir) => {
         let damage = entity.get_drill_damage();
@@ -378,14 +387,19 @@ impl State {
           disp: dir.clone(),
         })?;
         self.attack(to, damage)?;
+        self.set_entity_action(command.entity_id, Action::Drill(dir))?;
       }
       Verb::Construct(template, dir) => {
         let from = entity.pos.clone();
         let to = State::add_displace(from, &Displace::from(dir))?;
-        let creature = self.get_creature(entity.team, template)?;
+        let team = entity.team.clone();
+        let creature = self.get_creature(team, template)?;
         self.construct_entity(command.entity_id, creature, template, to)?;
+        self.set_entity_action(command.entity_id, Action::Construct(template, dir))?;
       }
-      _ => {}
+      Verb::SetMessage(m) => {
+        self.set_entity_action(command.entity_id, Action::SetMessage(m))?;
+      }
     };
     return Ok(());
   }

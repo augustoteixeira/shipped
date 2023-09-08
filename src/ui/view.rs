@@ -68,54 +68,6 @@ fn random_verb(rng: &mut ChaCha8Rng) -> Verb {
   }
 }
 
-async fn draw_command(state: &State, command: &StateCommand) -> Result<(), StateError> {
-  let entity = state.get_entity_by_id(command.entity_id)?;
-  match command.verb.clone() {
-    Verb::Shoot(disp) => {
-      let from = entity.pos;
-      let to = State::add_displace(from, &disp)?;
-      let damage = entity.get_gun_damage();
-      draw_line(
-        XDISPL + (16 * from.x) as f32 + 8.0,
-        YDISPL + (16 * from.y) as f32 + 8.0,
-        XDISPL + (16 * to.x) as f32 + 8.0,
-        YDISPL + (16 * to.y) as f32 + 8.0,
-        6.0 - (5.0 / (damage as f32)),
-        RED,
-      );
-      draw_circle(
-        XDISPL + (16 * to.x) as f32 + 8.0,
-        YDISPL + (16 * to.y) as f32 + 8.0,
-        12.0 - (11.0 / (damage as f32)),
-        RED,
-      );
-      Ok(())
-    }
-    Verb::Drill(dir) => {
-      let from = entity.pos;
-      let to = State::add_displace(from, &dir.into())?;
-      let damage = entity.get_gun_damage();
-      draw_line(
-        XDISPL + (16 * from.x) as f32 + 8.0,
-        YDISPL + (16 * from.y) as f32 + 8.0,
-        XDISPL + (16 * to.x) as f32 + 8.0,
-        YDISPL + (16 * to.y) as f32 + 8.0,
-        6.0 - (3.0 / (damage as f32)),
-        BLUE,
-      );
-      draw_circle(
-        XDISPL + (16 * to.x) as f32 + 8.0,
-        YDISPL + (16 * to.y) as f32 + 8.0,
-        12.0 - (6.0 / (damage as f32)),
-        BLUE,
-      );
-
-      Ok(())
-    }
-    _ => Ok(()),
-  }
-}
-
 #[derive(Clone, Debug)]
 pub struct ViewState {
   pub level: usize,
@@ -207,7 +159,7 @@ impl Ui for View {
     let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(17).try_into().unwrap();
     let mut state = initial_state.clone();
     let mut frames: Vec<Frame> = vec![];
-    for _ in 1..1000 {
+    for _ in 1..10000 {
       let mut frame = vec![];
       let id_vec = state.get_entities_ids();
       for id in id_vec {

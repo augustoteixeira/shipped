@@ -3,7 +3,7 @@ use macroquad::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::constants::{HEIGHT, WIDTH};
-use crate::state::entity::{ActiveEntity, MixTemplate, MovementType, Team};
+use crate::state::entity::{Action, ActiveEntity, MixTemplate, MovementType, Team};
 use crate::state::geometry::{board_iterator, Pos};
 use crate::state::materials::Materials;
 use crate::state::state::{State, Tile};
@@ -91,6 +91,50 @@ pub async fn draw_materials(
   }
 }
 
+async fn draw_command(entity: &ActiveEntity, h_displace: f32, v_displace: f32) {
+  match entity.last_action.clone() {
+    Action::Shoot(disp) => {
+      let from = entity.pos;
+      let to = State::add_displace(from, &disp).unwrap();
+      let damage = entity.get_gun_damage();
+      draw_line(
+        h_displace + (16 * from.x) as f32 + 8.0,
+        v_displace + (16 * from.y) as f32 + 8.0,
+        h_displace + (16 * to.x) as f32 + 8.0,
+        v_displace + (16 * to.y) as f32 + 8.0,
+        6.0 - (5.0 / (damage as f32)),
+        RED,
+      );
+      draw_circle(
+        h_displace + (16 * to.x) as f32 + 8.0,
+        v_displace + (16 * to.y) as f32 + 8.0,
+        12.0 - (11.0 / (damage as f32)),
+        RED,
+      );
+    }
+    Action::Drill(dir) => {
+      let from = entity.pos;
+      let to = State::add_displace(from, &dir.into()).unwrap();
+      let damage = entity.get_gun_damage();
+      draw_line(
+        h_displace + (16 * from.x) as f32 + 8.0,
+        v_displace + (16 * from.y) as f32 + 8.0,
+        h_displace + (16 * to.x) as f32 + 8.0,
+        v_displace + (16 * to.y) as f32 + 8.0,
+        6.0 - (3.0 / (damage as f32)),
+        BLUE,
+      );
+      draw_circle(
+        h_displace + (16 * to.x) as f32 + 8.0,
+        v_displace + (16 * to.y) as f32 + 8.0,
+        12.0 - (6.0 / (damage as f32)),
+        BLUE,
+      );
+    }
+    _ => {}
+  }
+}
+
 pub async fn draw_entity(
   entity: Option<&ActiveEntity>,
   h_displace: f32,
@@ -130,6 +174,7 @@ pub async fn draw_entity(
         LIGHTGRAY,
       );
     }
+    draw_command(e, h_displace, v_displace).await;
   }
 }
 
