@@ -141,10 +141,18 @@ pub enum Sign {
   Minus,
 }
 
-pub fn plus_minus(value: usize, sign: Sign) -> usize {
+pub fn one_or_ten(input: &Input) -> usize {
+  if matches!(input, Input::Click(MouseButton::Left, _)) {
+    1
+  } else {
+    10
+  }
+}
+
+pub fn plus_minus(input: &Input, value: usize, sign: Sign) -> usize {
   match sign {
-    Sign::Plus => value + 1,
-    Sign::Minus => value.saturating_sub(1),
+    Sign::Plus => value + one_or_ten(input),
+    Sign::Minus => value.saturating_sub(one_or_ten(input)),
   }
 }
 
@@ -206,7 +214,7 @@ impl<T: Sync + Clone + core::fmt::Debug> Ui for Button<T> {
 
   fn process_input(&mut self, input: Input) -> Option<T> {
     if self.active {
-      if let Input::Click(MouseButton::Left, (x, y)) = input {
+      if let Input::Click(_, (x, y)) = input {
         if in_rectangle(x, y, &self.rect) {
           return Some(self.command.clone());
         }
@@ -267,7 +275,7 @@ impl<T: Sync + Clone + core::fmt::Debug + Send> Ui for ButtonPanel<T> {
   }
 
   fn process_input(&mut self, input: Input) -> Option<T> {
-    if let Input::Click(MouseButton::Left, (x, y)) = input {
+    if let Input::Click(_, (x, y)) = input {
       for b in &self.buttons {
         if in_rectangle(x, y, &b.rect) {
           return Some(b.command.clone());

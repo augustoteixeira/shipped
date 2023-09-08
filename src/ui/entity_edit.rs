@@ -6,7 +6,8 @@ use async_trait::async_trait;
 use macroquad::prelude::*;
 
 use super::ui::{
-  build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
+  build_incrementer, one_or_ten, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect,
+  Sign, Ui,
 };
 use crate::state::bf::EntityState;
 use crate::state::constants::NUM_TEMPLATES;
@@ -293,44 +294,44 @@ impl Ui for EntityEdit {
         if let EntityState::Entity(mix, _) = &mut self.entity {
           match attribute {
             Attribute::Token => {
-              mix.tokens = plus_minus(mix.tokens, sign);
+              mix.tokens = plus_minus(&input, mix.tokens, sign);
             }
             Attribute::HP => {
-              mix.hp = max(plus_minus(mix.hp, sign), 1);
+              mix.hp = max(plus_minus(&input, mix.hp, sign), 1);
             }
             Attribute::InvSize => {
-              mix.inventory_size = plus_minus(mix.inventory_size, sign);
+              mix.inventory_size = plus_minus(&input, mix.inventory_size, sign);
             }
             Attribute::Carbon => {
-              mix.materials.carbon = plus_minus(mix.materials.carbon, sign);
+              mix.materials.carbon = plus_minus(&input, mix.materials.carbon, sign);
             }
             Attribute::Silicon => {
-              mix.materials.silicon = plus_minus(mix.materials.silicon, sign);
+              mix.materials.silicon = plus_minus(&input, mix.materials.silicon, sign);
             }
             Attribute::Plutonium => {
-              mix.materials.plutonium = plus_minus(mix.materials.plutonium, sign);
+              mix.materials.plutonium = plus_minus(&input, mix.materials.plutonium, sign);
             }
             Attribute::Copper => {
-              mix.materials.copper = plus_minus(mix.materials.copper, sign);
+              mix.materials.copper = plus_minus(&input, mix.materials.copper, sign);
             }
             Attribute::Sub1 => {
               if let Mix::Half(h) | Mix::Full(Full { half: h, .. }) = &mut mix.brain {
-                h[0] = min(plus_minus(h[0] as usize, sign), NUM_TEMPLATES - 1) as u8;
+                h[0] = min(plus_minus(&input, h[0] as usize, sign), NUM_TEMPLATES - 1) as u8;
               }
             }
             Attribute::Sub2 => {
               if let Mix::Half(h) | Mix::Full(Full { half: h, .. }) = &mut mix.brain {
-                h[1] = min(plus_minus(h[1] as usize, sign), NUM_TEMPLATES - 1) as u8;
+                h[1] = min(plus_minus(&input, h[1] as usize, sign), NUM_TEMPLATES - 1) as u8;
               }
             }
             Attribute::CodeID => {
               if let Mix::Full(Full { code_index: c, .. }) = &mut mix.brain {
-                *c = plus_minus(*c, sign);
+                *c = plus_minus(&input, *c, sign);
               }
             }
             Attribute::Gas => {
               if let Mix::Full(Full { gas: g, .. }) = &mut mix.brain {
-                *g = plus_minus(*g, sign);
+                *g = plus_minus(&input, *g, sign);
               }
             }
             Attribute::Speed => match sign {
@@ -338,10 +339,10 @@ impl Ui for EntityEdit {
               Sign::Plus => mix.movement_type = MovementType::Walk,
             },
             Attribute::GunDamage => {
-              mix.gun_damage = plus_minus(mix.gun_damage, sign);
+              mix.gun_damage = plus_minus(&input, mix.gun_damage, sign);
             }
             Attribute::DrillDamage => {
-              mix.drill_damage = plus_minus(mix.drill_damage, sign);
+              mix.drill_damage = plus_minus(&input, mix.drill_damage, sign);
             }
           };
         }

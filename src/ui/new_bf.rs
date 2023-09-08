@@ -12,7 +12,9 @@ use std::path::Path;
 
 use super::canvas::{draw_floor, draw_mat_map, draw_template_at};
 use super::entity_edit::{EntityEdit, EntityEditCommand};
-use super::ui::{build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect, Ui};
+use super::ui::{
+  build_incrementer, one_or_ten, split, trim_margins, Button, ButtonPanel, Input, Rect, Ui,
+};
 use crate::state::bf::{join_tiles, BFState, EntityState, MatName, ValidationError};
 use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
 use crate::state::entity::Team;
@@ -54,7 +56,7 @@ pub enum Command {
   MatPM(MatName, Sign),
   MatBrush(MatName),
   Token(TknButton, Sign),
-  MapLeftClk(Pos),
+  MapClk(Pos),
   BotNumber(usize, Sign),
   BotBrush(usize),
   EraserBrush,
@@ -297,7 +299,7 @@ impl NewBF {
           16.0,
           16.0,
         ),
-        ("".to_string(), Command::MapLeftClk(pos), true, false),
+        ("".to_string(), Command::MapClk(pos), true, false),
       ))
     }
     self.panel = button_panel;
@@ -467,7 +469,14 @@ impl Ui for NewBF {
           None => {}
           Some(Command::MatPM(mat_name, sign)) => match sign {
             Sign::Plus => {
-              self.state.add_material(mat_name, 1);
+              self.state.add_material(
+                mat_name,
+                match input {
+                  Input::Click(MouseButton::Left, _) => 1,
+                  Input::Click(MouseButton::Right, _) => 10,
+                  _ => 0,
+                },
+              );
             }
             Sign::Minus => {
               if let Err(e) = self.state.try_sub_material(mat_name, 1) {
@@ -507,24 +516,40 @@ impl Ui for NewBF {
               }
             },
           },
-          Some(Command::MapLeftClk(pos)) => match self.brush {
+          Some(Command::MapClk(pos)) => match self.brush {
             Brush::Carbon => {
-              if let Err(e) = self.state.insert_material_tile(MatName::Carbon, pos, 1) {
+              if let Err(e) =
+                self
+                  .state
+                  .insert_material_tile(MatName::Carbon, pos, one_or_ten(&input))
+              {
                 self.message = format!("{}", e);
               };
             }
             Brush::Silicon => {
-              if let Err(e) = self.state.insert_material_tile(MatName::Silicon, pos, 1) {
+              if let Err(e) =
+                self
+                  .state
+                  .insert_material_tile(MatName::Silicon, pos, one_or_ten(&input))
+              {
                 self.message = format!("{}", e);
               };
             }
             Brush::Plutonium => {
-              if let Err(e) = self.state.insert_material_tile(MatName::Plutonium, pos, 1) {
+              if let Err(e) =
+                self
+                  .state
+                  .insert_material_tile(MatName::Plutonium, pos, one_or_ten(&input))
+              {
                 self.message = format!("{}", e);
               };
             }
             Brush::Copper => {
-              if let Err(e) = self.state.insert_material_tile(MatName::Copper, pos, 1) {
+              if let Err(e) =
+                self
+                  .state
+                  .insert_material_tile(MatName::Copper, pos, one_or_ten(&input))
+              {
                 self.message = format!("{}", e);
               };
             }

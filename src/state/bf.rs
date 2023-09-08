@@ -268,16 +268,16 @@ impl BFState {
     self.try_sub_material(mat_name.clone(), amount)?;
     match mat_name {
       MatName::Carbon => {
-        self.tiles[pos.to_index()].materials.carbon += 1;
+        self.tiles[pos.to_index()].materials.carbon += amount;
       }
       MatName::Silicon => {
-        self.tiles[pos.to_index()].materials.silicon += 1;
+        self.tiles[pos.to_index()].materials.silicon += amount;
       }
       MatName::Plutonium => {
-        self.tiles[pos.to_index()].materials.plutonium += 1;
+        self.tiles[pos.to_index()].materials.plutonium += amount;
       }
       MatName::Copper => {
-        self.tiles[pos.to_index()].materials.copper += 1;
+        self.tiles[pos.to_index()].materials.copper += amount;
       }
     }
     Ok(())

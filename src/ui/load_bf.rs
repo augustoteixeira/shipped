@@ -362,7 +362,7 @@ impl Ui for LoadBF {
           ));
         }
         Some(Command::ChangeBF(sign)) => {
-          let s_prime = plus_minus(*s, *sign);
+          let s_prime = plus_minus(&input, *s, *sign);
           match load_level_file(s_prime) {
             Some(state) => {
               *bf_state = state;
@@ -411,7 +411,7 @@ impl Ui for LoadBF {
             Team::Red => (red_squad, red_index),
             _ => unimplemented!(),
           };
-          let s_prime = plus_minus(*relevant_index, *sign);
+          let s_prime = plus_minus(&input, *relevant_index, *sign);
           match load_squad_file(*level, s_prime) {
             Some(state) => {
               *relevant_squad = state;
