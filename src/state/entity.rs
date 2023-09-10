@@ -78,7 +78,6 @@ pub struct MixTemplate {
   pub movement_type: MovementType,
   pub gun_damage: usize,
   pub drill_damage: usize,
-  pub message: Option<Message>,
   pub brain: Mix,
 }
 
@@ -218,6 +217,10 @@ impl TemplateEntity {
   }
 }
 
+pub fn super_linear(i: usize) -> usize {
+  f64::powf(i as f64, 1.3).floor() as usize
+}
+
 pub fn max_weight(body: &TemplateEntity) -> usize {
   let mut result = 0;
   result += body.hp;
@@ -228,41 +231,20 @@ pub fn max_weight(body: &TemplateEntity) -> usize {
 pub fn cost(template: &TemplateEntity) -> Materials {
   let w = max_weight(&template);
   let mut result = template.materials.clone();
-  result.carbon += template.hp * template.hp;
-  result.carbon += template.inventory_size * template.inventory_size;
+  result.carbon += super_linear(template.hp);
+  result.carbon += super_linear(template.inventory_size);
   match template.movement_type {
     MovementType::Still => {}
     MovementType::Walk => result.plutonium += w,
   }
   result.plutonium += template.drill_damage;
-  result.plutonium += template.gun_damage * template.gun_damage;
+  result.plutonium += super_linear(template.gun_damage);
   if let Some(f) = &template.brain {
     result.plutonium += f.gas / 10 + 1;
   }
   result
 }
 
-// Delete this version?
-pub fn max_weight_template(body: &MixTemplate) -> usize {
-  let mut result = 0;
-  result += body.hp;
-  result += body.inventory_size;
-  result
-}
-
-pub fn cost_template(template: &MixTemplate) -> Materials {
-  let w = max_weight_template(&template);
-  let mut result = template.materials.clone();
-  result.carbon += template.hp * template.hp;
-  result.carbon += template.inventory_size * template.inventory_size;
-  match template.movement_type {
-    MovementType::Still => {}
-    MovementType::Walk => result.plutonium += w,
-  }
-  result.plutonium += template.drill_damage;
-  result.plutonium += template.gun_damage * template.gun_damage;
-  if let Mix::Full(f) = &template.brain {
-    result.plutonium += f.gas / 10 + 1;
-  }
-  result
+pub fn cost_template(mix_template: &MixTemplate) -> Materials {
+  cost(&mix_template.clone().try_into().unwrap())
 }

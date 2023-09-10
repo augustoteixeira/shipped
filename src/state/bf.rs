@@ -193,7 +193,6 @@ pub fn build_state(level: &BFState, blue: &BFState, red: &BFState) -> State {
   for pos in half_board_iterator() {
     if let Some(id) = joined_tiles[pos.to_index()].entity_id {
       let blue_entity = blue.entities[id].clone();
-      println!("{}", state.blue_tokens);
       match blue_entity {
         EntityState::Empty => unreachable!(),
         EntityState::Entity(e, _) => {
@@ -341,7 +340,6 @@ impl BFState {
           movement_type: MovementType::Still,
           gun_damage: 0,
           drill_damage: 0,
-          message: None,
           brain: Mix::Bare,
         },
         0,

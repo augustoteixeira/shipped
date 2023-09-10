@@ -9,7 +9,7 @@ Add WASM Coding
 UI
 --
 
-- add +- 10 to incrementers with right click
+
 
 Code quality
 ------------

@@ -353,7 +353,6 @@ impl Ui for EntityEdit {
           mix.movement_type = MovementType::Still;
           mix.gun_damage = 0;
           mix.drill_damage = 0;
-          mix.message = None;
           mix.brain = Mix::Bare;
         }
       }
