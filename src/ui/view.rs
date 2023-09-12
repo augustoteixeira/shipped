@@ -9,64 +9,14 @@ use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
 use super::ui::{build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect, Ui};
-use crate::state::bf::{build_state, load_level_file, load_squad_file, BFState};
-use crate::state::constants::{HEIGHT, NUM_TEMPLATES, WIDTH};
-use crate::state::geometry::{Direction, Displace, Neighbor};
-use crate::state::materials::Materials;
-use crate::state::state::{
-  Command as StateCommand, Frame, GameStatus, Script, State, StateError, Verb,
-};
+use crate::state::bf::{load_level_file, load_squad_file, BFState};
+use crate::state::constants::{HEIGHT, WIDTH};
+use crate::state::run::run_match;
+use crate::state::state::{Frame, GameStatus, State};
 use crate::ui::canvas::{draw_entity_map, draw_floor, draw_mat_map};
 
 const XDISPL: f32 = 800.0;
 const YDISPL: f32 = 30.0;
-
-fn random_material(rng: &mut ChaCha8Rng) -> Materials {
-  let material_type = rng.gen_range(0..4);
-  Materials {
-    carbon: if material_type == 0 { 1 } else { 0 },
-    silicon: if material_type == 1 { 1 } else { 0 },
-    plutonium: if material_type == 2 { 1 } else { 0 },
-    copper: if material_type == 3 { 1 } else { 0 },
-  }
-}
-
-fn random_direction(rng: &mut ChaCha8Rng) -> Direction {
-  match rng.gen_range(0..4) {
-    0 => Direction::North,
-    1 => Direction::East,
-    2 => Direction::South,
-    _ => Direction::West,
-  }
-}
-
-fn random_neighbor(rng: &mut ChaCha8Rng) -> Neighbor {
-  match rng.gen_range(0..5) {
-    0 => Neighbor::North,
-    1 => Neighbor::East,
-    2 => Neighbor::South,
-    3 => Neighbor::West,
-    _ => Neighbor::Here,
-  }
-}
-
-fn random_vicinity(rng: &mut ChaCha8Rng) -> Displace {
-  Displace::new(
-    rng.gen_range(0..11) as i64 - 5,
-    rng.gen_range(0..11) as i64 - 5,
-  )
-}
-
-fn random_verb(rng: &mut ChaCha8Rng) -> Verb {
-  match rng.gen_range(0..7) {
-    0 => Verb::AttemptMove(random_direction(rng)),
-    1 => Verb::GetMaterials(random_neighbor(rng), random_material(rng)),
-    2 => Verb::DropMaterials(random_neighbor(rng), random_material(rng)),
-    3 => Verb::Shoot(random_vicinity(rng)),
-    4 => Verb::Construct(rng.gen_range(0..NUM_TEMPLATES), random_direction(rng)),
-    _ => Verb::Drill(random_direction(rng)),
-  }
-}
 
 #[derive(Clone, Debug)]
 pub struct ViewState {
@@ -155,28 +105,7 @@ impl Ui for View {
       None => unreachable!(),
     };
 
-    let initial_state = build_state(&level, &blue_squad, &red_squad);
-    let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(17).try_into().unwrap();
-    let mut state = initial_state.clone();
-    let mut frames: Vec<Frame> = vec![];
-    for _ in 1..10000 {
-      let mut frame = vec![];
-      let id_vec = state.get_entities_ids();
-      for id in id_vec {
-        let command = StateCommand {
-          entity_id: id,
-          verb: random_verb(&mut rng),
-        };
-        if let Ok(_) = state.execute_command(command.clone()) {
-          frame.push(command.clone());
-        }
-      }
-      frames.push(frame);
-    }
-    let script: Script = Script {
-      genesis: initial_state,
-      frames,
-    };
+    let script = run_match(&level, &blue_squad, &red_squad, 1000);
 
     let state = script.genesis;
     let frames = script.frames;

@@ -6,8 +6,7 @@ use async_trait::async_trait;
 use macroquad::prelude::*;
 
 use super::ui::{
-  build_incrementer, one_or_ten, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect,
-  Sign, Ui,
+  build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
 };
 use crate::state::bf::EntityState;
 use crate::state::constants::NUM_TEMPLATES;
