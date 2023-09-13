@@ -16,7 +16,7 @@ pub fn run_match(
 ) -> Script {
   // run match
   let initial_state = build_state(&level, &blue_squad, &red_squad);
-  let mut state = initial_state.clone();
+  let mut state = build_state(&level, &blue_squad, &red_squad);
   let mut frames: Vec<Frame> = vec![];
   let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(17).try_into().unwrap();
   for _ in 1..turns {

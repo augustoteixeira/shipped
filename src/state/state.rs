@@ -1,8 +1,10 @@
+use init_array::init_array;
 use line_drawing::Bresenham;
 use serde::{Deserialize, Serialize};
 use snafu::prelude::*;
 use std::cmp::max;
 use std::collections::HashMap;
+use wasmer::{imports, Instance, Module, Store};
 
 use super::constants::{HEIGHT, NUM_CODES, NUM_TEMPLATES, WIDTH};
 use super::entity::{cost, Action, ActiveEntity, Code, Message, Team, TemplateEntity};
@@ -28,7 +30,15 @@ pub enum GameStatus {
   RedWon,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+pub fn storeless() -> Option<Store> {
+  None
+}
+
+pub fn moduleless() -> [Option<Module>; NUM_TEMPLATES] {
+  init_array(|_| None)
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct State {
   pub game_status: GameStatus,
   pub min_tokens: usize,
@@ -36,11 +46,30 @@ pub struct State {
   pub red_tokens: usize,
   blue_codes: [Option<Code>; NUM_CODES],
   red_codes: [Option<Code>; NUM_CODES],
-  pub entities: HashMap<Id, ActiveEntity>,
+  entities: HashMap<Id, ActiveEntity>,
   next_unique_id: usize,
-  pub blue_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
+  blue_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
   red_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
+  #[serde(skip_serializing)]
+  #[serde(skip_deserializing)]
+  #[serde(default = "storeless")]
+  store: Option<Store>,
+  #[serde(skip_serializing)]
+  #[serde(skip_deserializing)]
+  #[serde(default = "moduleless")]
+  blue_modules: [Option<Module>; NUM_TEMPLATES],
+  #[serde(skip_serializing)]
+  #[serde(skip_deserializing)]
+  #[serde(default = "moduleless")]
+  red_modules: [Option<Module>; NUM_TEMPLATES],
   pub tiles: Vec<Tile>,
+}
+
+pub struct RunningState {
+  state: State,
+  store: Option<Store>,
+  blue_modules: [Option<usize>; NUM_TEMPLATES],
+  red_modules: [Option<usize>; NUM_TEMPLATES],
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -101,6 +130,10 @@ pub enum StateError {
   NotVisible { pos: Pos, disp: Displace },
 }
 
+//   store: store,
+//   blue_modules: [None; NUM_TEMPLATES],
+//   red_modules: [None; NUM_TEMPLATES],
+
 impl State {
   pub fn new(
     min_tokens: usize,
@@ -113,7 +146,17 @@ impl State {
   ) -> Self {
     assert!(tiles.len() == WIDTH * HEIGHT);
     let next_unique_id = entities.iter().fold(0, |a, (id, _)| max(a, *id));
-    State {
+
+    let module_wat = r#"
+      (module
+      (type $t0 (func (param i32) (result i32)))
+      (func $add_one (export "add_one") (type $t0) (param $p0 i32) (result i32)
+          get_local $p0
+          i32.const 1
+          i32.add))
+      "#;
+    let store = Store::default();
+    let mut state = State {
       game_status: GameStatus::Running,
       min_tokens,
       blue_tokens: 0,
@@ -124,8 +167,16 @@ impl State {
       next_unique_id,
       blue_templates,
       red_templates,
+      store: Some(store),
+      blue_modules: init_array(|_| None),
+      red_modules: init_array(|_| None),
       tiles,
+    };
+    if let Some(s) = &state.store {
+      state.blue_modules = init_array(|_| Some(Module::new(s, &module_wat).unwrap()));
+      state.red_modules = init_array(|_| Some(Module::new(s, &module_wat).unwrap()));
     }
+    state
   }
   pub fn has_entity(&self, pos: Pos) -> bool {
     self.tiles[pos.to_index()].entity_id.is_some()
@@ -147,6 +198,32 @@ impl State {
     }
     .ok_or(StateError::NoTemplate { team, template })
   }
+
+  pub fn upgrade(
+    &self,
+    template: TemplateEntity,
+    tokens: usize,
+    team: Team,
+    pos: Pos,
+  ) -> ActiveEntity {
+    //let import_object = imports! {};
+    //let instance = Instance::new(self.store.unwrap(), &self.module, &import_object).unwrap();
+
+    ActiveEntity {
+      tokens,
+      team,
+      pos,
+      hp: template.hp,
+      inventory_size: template.inventory_size,
+      materials: template.materials,
+      movement_type: template.movement_type,
+      gun_damage: template.gun_damage,
+      drill_damage: template.drill_damage,
+      last_action: Action::Wait,
+      brain: None,
+    }
+  }
+
   pub fn build_entity_from_template(
     &mut self,
     team: Team,
@@ -157,7 +234,7 @@ impl State {
     ensure!(!self.has_entity(pos), OccupiedTileSnafu { pos });
     let entity = self
       .get_creature(team, template)
-      .map(|t| t.upgrade(tokens, team, pos))?;
+      .map(|t| self.upgrade(t, tokens, team, pos))?;
     match team {
       Team::Blue => self.blue_tokens += tokens,
       Team::Red => self.red_tokens += tokens,
