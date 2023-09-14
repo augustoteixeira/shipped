@@ -1,13 +1,78 @@
 extern crate rand;
 extern crate rand_chacha;
+use snafu::prelude::*;
 
+use init_array::init_array;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
+use std::collections::HashMap;
+use wasmer::{imports, CompileError, Instance, InstantiationError, Module, Store, Value};
 
 use crate::state::constants::NUM_TEMPLATES;
 use crate::state::geometry::{Direction, Displace, Neighbor};
 use crate::state::materials::Materials;
-use crate::state::state::Verb;
+use crate::state::state::{Command, Id, Verb};
+
+#[derive(Debug, Snafu)]
+pub enum BrainError {
+  #[snafu(display("Could not create module {:}", index))]
+  CreateModule { source: CompileError, index: usize },
+  #[snafu(display("Could not create instance {:}", index))]
+  CreateInstance {
+    source: InstantiationError,
+    index: usize,
+  },
+}
+
+pub struct Brains {
+  store: Store,
+  blue_modules: [Module; NUM_TEMPLATES],
+  red_modules: [Module; NUM_TEMPLATES],
+  blue_brains: HashMap<Id, Instance>,
+  red_brains: HashMap<Id, Instance>,
+}
+
+impl Brains {
+  pub fn new(id_vec: Vec<usize>) -> Result<Self, BrainError> {
+    let module_wat = r#"
+    (module
+    (type $t0 (func (param i32) (result i32)))
+    (func $add_one (export "add_one") (type $t0) (param $p0 i32) (result i32)
+        get_local $p0
+        i32.const 1
+        i32.add))
+    "#;
+
+    let mut store = Store::default();
+    let module =
+      Module::new(&store, &module_wat).context(CreateModuleSnafu { index: 0 as usize })?;
+    // The module doesn't import anything, so we create an empty import object.
+    let blue_modules: [Module; NUM_TEMPLATES] = init_array(|_| module.clone());
+    let red_modules: [Module; NUM_TEMPLATES] = init_array(|_| module.clone());
+    let import_object = imports! {};
+    let instance = Instance::new(&mut store, &module, &import_object)
+      .context(CreateInstanceSnafu { index: 0 as usize })?;
+    let mut blue_brains: HashMap<Id, Instance> = HashMap::new();
+    for id in id_vec {
+      blue_brains.insert(id, instance.clone());
+    }
+    let red_brains: HashMap<Id, Instance> = HashMap::new();
+    Ok(Brains {
+      store,
+      blue_modules,
+      red_modules,
+      blue_brains,
+      red_brains,
+    })
+  }
+
+  pub fn get_command(&self, id: usize) -> Command {
+    Command {
+      entity_id: id,
+      verb: Verb::Wait,
+    }
+  }
+}
 
 fn random_material(rng: &mut ChaCha8Rng) -> Materials {
   let material_type = rng.gen_range(0..4);
