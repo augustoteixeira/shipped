@@ -154,25 +154,7 @@ fn main() {
     },
   )
   .unwrap();
-  let mut state = build_state(
-    random_squad(&mut rng, Team::Blue),
-    random_squad(&mut rng, Team::Red),
-    Settings {
-      min_tokens: 15,
-      tiles: (0..(WIDTH * HEIGHT))
-        .map(|_| Tile {
-          entity_id: None,
-          materials: Materials {
-            carbon: rng.gen_range(0..20) / 13,
-            silicon: rng.gen_range(0..20) / 13,
-            plutonium: rng.gen_range(0..20) / 13,
-            copper: rng.gen_range(0..20) / 13,
-          },
-        })
-        .collect(),
-    },
-  )
-  .unwrap();
+  let mut state = initial_state.clone();
   let mut frames: Vec<Frame> = vec![];
   for _ in 1..1000 {
     let mut frame = vec![];

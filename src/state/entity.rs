@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use wasmer::Instance;
 
 use super::constants::NUM_SUB_ENTITIES;
 use super::geometry::{Direction, Displace, Neighbor, Pos};
@@ -37,10 +36,6 @@ pub enum Action {
   SetMessage(Message),
 }
 
-pub fn brainless() -> Option<Instance> {
-  None
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ActiveEntity {
   pub tokens: usize,
@@ -53,10 +48,7 @@ pub struct ActiveEntity {
   pub gun_damage: usize,
   pub drill_damage: usize,
   pub last_action: Action,
-  #[serde(skip_serializing)]
-  #[serde(skip_deserializing)]
-  #[serde(default = "brainless")]
-  pub brain: Option<Instance>,
+  pub brain: Option<Full>,
 }
 
 pub type Half = [u8; NUM_SUB_ENTITIES];
@@ -203,6 +195,24 @@ impl TryFrom<MixTemplate> for TemplateEntity {
         message: None,
         brain: None,
       }),
+    }
+  }
+}
+
+impl TemplateEntity {
+  pub fn upgrade(self, tokens: usize, team: Team, pos: Pos) -> ActiveEntity {
+    ActiveEntity {
+      tokens,
+      team,
+      pos,
+      hp: self.hp,
+      inventory_size: self.inventory_size,
+      materials: self.materials,
+      movement_type: self.movement_type,
+      gun_damage: self.gun_damage,
+      drill_damage: self.drill_damage,
+      last_action: Action::Wait,
+      brain: self.brain,
     }
   }
 }
