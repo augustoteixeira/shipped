@@ -13,6 +13,13 @@ use crate::state::geometry::{Direction, Displace, Neighbor};
 use crate::state::materials::Materials;
 use crate::state::state::{Command, Id, Verb};
 
+fn decode(opcode: u64) -> Verb {
+  match (opcode & 0xFF00000000000000) >> 56 {
+    1 => Verb::Wait,
+    _ => Verb::Wait,
+  }
+}
+
 #[derive(Debug, Snafu)]
 pub enum BrainError {
   #[snafu(display("Could not create module {:}", index))]
