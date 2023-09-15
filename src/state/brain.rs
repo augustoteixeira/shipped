@@ -6,16 +6,20 @@ use init_array::init_array;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashMap;
-use wasmer::{imports, CompileError, Instance, InstantiationError, Module, Store, Value};
+use wasmer::{
+  imports, CompileError, ExportError, Instance, InstantiationError, Module, RuntimeError, Store,
+  Value,
+};
 
 use crate::state::constants::NUM_TEMPLATES;
 use crate::state::geometry::{Direction, Displace, Neighbor};
 use crate::state::materials::Materials;
 use crate::state::state::{Command, Id, Verb};
 
-fn decode(opcode: u64) -> Verb {
-  match (opcode & 0xFF00000000000000) >> 56 {
+fn decode(opcode: u128) -> Verb {
+  match (opcode & 0xFF000000000000000000000000000000) >> 120 {
     1 => Verb::Wait,
+    2 => Verb::AttemptMove(Direction::North),
     _ => Verb::Wait,
   }
 }
@@ -29,6 +33,14 @@ pub enum BrainError {
     source: InstantiationError,
     index: usize,
   },
+}
+
+#[derive(Debug, Snafu)]
+pub enum ExecutionError {
+  #[snafu(display("No execute function in template {:}", index))]
+  NoExecute { source: ExportError, index: usize },
+  #[snafu(display("Error executing code for bot {:}", index))]
+  Runtime { source: RuntimeError, index: usize },
 }
 
 pub struct Brains {
@@ -69,12 +81,25 @@ impl Brains {
     })
   }
 
-  pub fn get_command(&self, id: usize) -> Command {
-    let execute = blue_brains.exports.get_function("add_one")?;
-    Command {
+  pub fn get_command(&mut self, id: usize) -> Result<Command, ExecutionError> {
+    let execute = self
+      .blue_brains
+      .get(&id)
+      .unwrap()
+      .exports
+      .get_function("execute")
+      .context(NoExecuteSnafu { index: id })?;
+    let result = execute
+      .call(&mut self.store, &[])
+      .context(RuntimeSnafu { index: id })?;
+    let value = match result[0] {
+      Value::V128(r) => r,
+      _ => 0x02000000000000000000000000000000,
+    };
+    Ok(Command {
       entity_id: id,
-      verb: Verb::Wait,
-    }
+      verb: decode(value),
+    })
   }
 }
 

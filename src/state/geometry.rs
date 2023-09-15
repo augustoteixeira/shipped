@@ -116,9 +116,9 @@ pub struct Displace {
 impl From<Direction> for Displace {
   fn from(d: Direction) -> Self {
     match d {
-      Direction::North => Displace { x: 0, y: -1 },
+      Direction::North => Displace { x: 0, y: 1 },
       Direction::East => Displace { x: 1, y: 0 },
-      Direction::South => Displace { x: 0, y: 1 },
+      Direction::South => Displace { x: 0, y: -1 },
       Direction::West => Displace { x: -1, y: 0 },
     }
   }
@@ -127,9 +127,9 @@ impl From<Direction> for Displace {
 impl From<Neighbor> for Displace {
   fn from(d: Neighbor) -> Self {
     match d {
-      Neighbor::North => Displace { x: 0, y: -1 },
+      Neighbor::North => Displace { x: 0, y: 1 },
       Neighbor::East => Displace { x: 1, y: 0 },
-      Neighbor::South => Displace { x: 0, y: 1 },
+      Neighbor::South => Displace { x: 0, y: -1 },
       Neighbor::West => Displace { x: -1, y: 0 },
       Neighbor::Here => Displace { x: 0, y: 0 },
     }

@@ -19,15 +19,16 @@ pub fn run_match(
   let initial_id_vec = initial_state.get_entities_ids();
   let mut brains: Brains = Brains::new(initial_id_vec).unwrap();
   let mut frames: Vec<Frame> = vec![];
-  let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(17).try_into().unwrap();
+  //let mut rng: ChaCha8Rng = ChaCha8Rng::seed_from_u64(17).try_into().unwrap();
   let mut state = initial_state.clone();
   for _ in 1..turns {
     let mut frame = vec![];
     let id_vec = state.get_entities_ids();
     for id in id_vec {
-      let command = brains.get_command(id);
-      if let Ok(_) = state.execute_command(command.clone()) {
-        frame.push(command.clone());
+      if let Ok(command) = brains.get_command(id) {
+        if let Ok(_) = state.execute_command(command.clone()) {
+          frame.push(command.clone());
+        }
       }
     }
     frames.push(frame);
