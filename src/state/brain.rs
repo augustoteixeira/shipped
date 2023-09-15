@@ -43,11 +43,7 @@ impl Brains {
   pub fn new(id_vec: Vec<usize>) -> Result<Self, BrainError> {
     let module_wat = r#"
     (module
-    (type $t0 (func (param i32) (result i32)))
-    (func $add_one (export "add_one") (type $t0) (param $p0 i32) (result i32)
-        get_local $p0
-        i32.const 1
-        i32.add))
+      (func $execute (export "execute") (result i64) i64.const 0x0100000000000000))
     "#;
 
     let mut store = Store::default();
@@ -74,6 +70,7 @@ impl Brains {
   }
 
   pub fn get_command(&self, id: usize) -> Command {
+    let execute = blue_brains.exports.get_function("add_one")?;
     Command {
       entity_id: id,
       verb: Verb::Wait,

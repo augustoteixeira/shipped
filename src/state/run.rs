@@ -5,8 +5,8 @@ use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 
 use crate::state::bf::{build_state, BFState};
-use crate::state::brain::{random_verb, Brains};
-use crate::state::state::{Command as StateCommand, Frame, Script};
+use crate::state::brain::Brains;
+use crate::state::state::{Frame, Script};
 
 pub fn run_match(
   level: &BFState,
