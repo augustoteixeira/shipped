@@ -31,3 +31,9 @@ path = "src/view.rs"
 [[bin]]
 name = "gui"
 path = "src/gui.rs"
+
+[workspace]
+
+members = [
+    "bots",
+]
