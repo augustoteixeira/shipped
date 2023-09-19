@@ -1,6 +1,4 @@
-//use wasm_bindgen::prelude::*;
-
-//#[wasm_bindgen]
-pub extern "C" fn execute() -> i64 {
-  return 0x0001010000000000;
+#[no_mangle]
+pub fn execute() -> i64 {
+  return 0x0002010000000000;
 }

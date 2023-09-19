@@ -143,7 +143,7 @@ pub enum BrainError {
 
 #[derive(Debug, Snafu)]
 pub enum ExecutionError {
-  #[snafu(display("No execute function in template {:}", index))]
+  #[snafu(display("No execute function in template {:}: {:}", index, source))]
   NoExecute { source: ExportError, index: usize },
   #[snafu(display("Error executing code for bot {:}", index))]
   Runtime { source: RuntimeError, index: usize },
@@ -168,7 +168,7 @@ impl Brains {
     // let module =
     //   Module::new(&store, &module_wat).context(CreateModuleSnafu { index: 0 as usize })?;
 
-    let wasm_bytes = std::fs::read("../../bots/target/wasm32-unknown-unknown/release/up.wasm")
+    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/up.wasm")
       .context(LoadWasmSnafu { index: 0 as usize })?;
     let module =
       Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;

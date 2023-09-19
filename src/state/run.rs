@@ -1,9 +1,6 @@
 extern crate rand;
 extern crate rand_chacha;
 
-use rand::prelude::*;
-use rand_chacha::ChaCha8Rng;
-
 use crate::state::bf::{build_state, BFState};
 use crate::state::brain::Brains;
 use crate::state::state::{Frame, Script};
@@ -25,9 +22,14 @@ pub fn run_match(
     let mut frame = vec![];
     let id_vec = state.get_entities_ids();
     for id in id_vec {
-      if let Ok(command) = brains.get_command(id) {
-        if let Ok(_) = state.execute_command(command.clone()) {
-          frame.push(command.clone());
+      match brains.get_command(id) {
+        Ok(command) => {
+          if let Ok(_) = state.execute_command(command.clone()) {
+            frame.push(command.clone());
+          }
+        }
+        Err(e) => {
+          println!("{:}", e);
         }
       }
     }

@@ -32,8 +32,10 @@ path = "src/view.rs"
 name = "gui"
 path = "src/gui.rs"
 
-[workspace]
+[profile.release]
+strip = true
 
+[workspace]
 members = [
-    "bots",
+    "bots/up",
 ]
