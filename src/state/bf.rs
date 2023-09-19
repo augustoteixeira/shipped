@@ -203,9 +203,9 @@ pub fn build_state(level: &BFState, blue: &BFState, red: &BFState) -> State {
       }
     }
     if let Some(id) = joined_tiles[pos.invert().to_index()].entity_id {
-      let red_entity = blue.entities[id].clone();
+      let red_entity = red.entities[id].clone();
       match red_entity {
-        EntityState::Empty => unreachable!(),
+        EntityState::Empty => unreachable!(), //{ eprintln!("Error!!! Red ")},
         EntityState::Entity(e, _) => {
           state
             .build_entity_from_template(Team::Red, e.tokens, id, pos.invert())
