@@ -134,6 +134,11 @@ pub enum BrainError {
     source: InstantiationError,
     index: usize,
   },
+  #[snafu(display("Could not load wasm code {:}", index))]
+  LoadWasm {
+    source: std::io::Error,
+    index: usize,
+  },
 }
 
 #[derive(Debug, Snafu)]
@@ -154,14 +159,20 @@ pub struct Brains {
 
 impl Brains {
   pub fn new(id_vec: Vec<usize>) -> Result<Self, BrainError> {
-    let module_wat = r#"
-    (module
-      (func $execute (export "execute") (result i64) i64.const 0x0002020000000000))
-    "#;
-
     let mut store = Store::default();
+
+    //let module_wat = r#"
+    //(module
+    //  (func $execute (export "execute") (result i64) i64.const 0x0002020000000000))
+    //"#;
+    // let module =
+    //   Module::new(&store, &module_wat).context(CreateModuleSnafu { index: 0 as usize })?;
+
+    let wasm_bytes = std::fs::read("../../bots/target/wasm32-unknown-unknown/release/up.wasm")
+      .context(LoadWasmSnafu { index: 0 as usize })?;
     let module =
-      Module::new(&store, &module_wat).context(CreateModuleSnafu { index: 0 as usize })?;
+      Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;
+
     // The module doesn't import anything, so we create an empty import object.
     let blue_modules: [Module; NUM_TEMPLATES] = init_array(|_| module.clone());
     let red_modules: [Module; NUM_TEMPLATES] = init_array(|_| module.clone());
