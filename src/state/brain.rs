@@ -170,10 +170,10 @@ impl Brains {
     let blue_modules: [Module; NUM_TEMPLATES] = init_array(|_| module.clone());
     let red_modules: [Module; NUM_TEMPLATES] = init_array(|_| module.clone());
     let import_object = imports! {};
-    let instance = Instance::new(&mut store, &module, &import_object)
-      .context(CreateInstanceSnafu { index: 0 as usize })?;
     let mut blue_brains: HashMap<Id, Instance> = HashMap::new();
     for id in id_vec {
+      let instance = Instance::new(&mut store, &module, &import_object)
+        .context(CreateInstanceSnafu { index: 0 as usize })?;
       blue_brains.insert(id, instance.clone());
     }
     let red_brains: HashMap<Id, Instance> = HashMap::new();
