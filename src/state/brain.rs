@@ -161,14 +161,7 @@ impl Brains {
   pub fn new(id_vec: Vec<usize>) -> Result<Self, BrainError> {
     let mut store = Store::default();
 
-    //let module_wat = r#"
-    //(module
-    //  (func $execute (export "execute") (result i64) i64.const 0x0002020000000000))
-    //"#;
-    // let module =
-    //   Module::new(&store, &module_wat).context(CreateModuleSnafu { index: 0 as usize })?;
-
-    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/up.wasm")
+    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/zigzag.wasm")
       .context(LoadWasmSnafu { index: 0 as usize })?;
     let module =
       Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;

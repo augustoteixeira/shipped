@@ -38,4 +38,5 @@ strip = true
 [workspace]
 members = [
     "bots/up",
+    "bots/zigzag",
 ]
