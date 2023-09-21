@@ -39,4 +39,5 @@ strip = true
 members = [
     "bots/up",
     "bots/zigzag",
+    "bots/import",
 ]

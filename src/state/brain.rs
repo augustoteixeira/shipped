@@ -7,8 +7,8 @@ use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashMap;
 use wasmer::{
-  imports, CompileError, ExportError, Instance, InstantiationError, Module, RuntimeError, Store,
-  Value,
+  imports, CompileError, ExportError, Function, Instance, InstantiationError, Module, RuntimeError,
+  Store, Value,
 };
 
 use crate::state::constants::NUM_TEMPLATES;
@@ -157,11 +157,24 @@ pub struct Brains {
   red_brains: HashMap<Id, Instance>,
 }
 
+fn invert(value: u8) -> u8 {
+  match value {
+    0..=3 => value + 1,
+    _ => 0,
+  }
+}
+
 impl Brains {
   pub fn new(id_vec: Vec<usize>) -> Result<Self, BrainError> {
     let mut store = Store::default();
 
-    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/zigzag.wasm")
+    let import_object = imports! {
+              "env" => {
+                  "invert" => Function::new_typed(&mut store, invert)
+              },
+    };
+
+    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/import.wasm")
       .context(LoadWasmSnafu { index: 0 as usize })?;
     let module =
       Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;
@@ -169,7 +182,7 @@ impl Brains {
     // The module doesn't import anything, so we create an empty import object.
     let blue_modules: [Module; NUM_TEMPLATES] = init_array(|_| module.clone());
     let red_modules: [Module; NUM_TEMPLATES] = init_array(|_| module.clone());
-    let import_object = imports! {};
+    //let import_object = imports! {};
     let mut blue_brains: HashMap<Id, Instance> = HashMap::new();
     for id in id_vec {
       let instance = Instance::new(&mut store, &module, &import_object)

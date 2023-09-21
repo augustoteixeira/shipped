@@ -24,20 +24,24 @@ fn read_value_in_wasm_memory(index: usize) -> Option<u8> {
   }
 }
 
+extern "C" {
+  fn invert(value: u8) -> u8;
+}
+
 #[no_mangle]
 pub fn execute() -> i64 {
   let value = read_value_in_wasm_memory(0);
   if let Some(v) = value {
+    let new_value = unsafe { invert(v) };
     match v {
       0 => {
-        store_value_in_wasm_memory(0, 1);
+        store_value_in_wasm_memory(0, new_value);
         return 0x0002010000000000;
       }
-      1 => {
-        store_value_in_wasm_memory(0, 0);
+      _ => {
+        store_value_in_wasm_memory(0, new_value);
         return 0x0002020000000000;
-      }
-      _ => {}
+      } //_ => {}
     }
   }
   return 0x0001000000000000;
