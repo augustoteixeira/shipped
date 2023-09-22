@@ -1,1 +1,1 @@
-find . -name '*.rs' | xargs wc -l
+find . -name '*.rs' | grep -v target | xargs wc -l
