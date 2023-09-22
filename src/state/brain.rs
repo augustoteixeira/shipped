@@ -1,14 +1,16 @@
 extern crate rand;
 extern crate rand_chacha;
 use snafu::prelude::*;
+use std::sync::Arc;
+use std::sync::Mutex;
 
 use init_array::init_array;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashMap;
 use wasmer::{
-  imports, CompileError, ExportError, Function, Instance, InstantiationError, Module, RuntimeError,
-  Store, Value,
+  imports, CompileError, ExportError, Function, FunctionEnv, FunctionEnvMut, Instance,
+  InstantiationError, Module, RuntimeError, Store, Value,
 };
 
 use crate::state::constants::NUM_TEMPLATES;
@@ -151,26 +153,40 @@ pub enum ExecutionError {
 
 pub struct Brains {
   store: Store,
+  seed: Env,
   blue_modules: [Module; NUM_TEMPLATES],
   red_modules: [Module; NUM_TEMPLATES],
   blue_brains: HashMap<Id, Instance>,
   red_brains: HashMap<Id, Instance>,
 }
 
-fn invert(value: u8) -> u8 {
-  match value {
-    0..=3 => value + 1,
-    _ => 0,
-  }
+#[derive(Clone)]
+struct Env {
+  seed: Arc<Mutex<u32>>,
+}
+
+fn rand(env: FunctionEnvMut<Env>) -> u32 {
+  let mut seed = env.data().seed.lock().unwrap();
+  let seed64: u64 = *seed as u64;
+  *seed = ((1103515245 * seed64 + 12345) % (1 << 31)) as u32;
+  *seed
 }
 
 impl Brains {
   pub fn new(id_vec: Vec<usize>) -> Result<Self, BrainError> {
     let mut store = Store::default();
+    let shared_seed = Arc::new(Mutex::new(123456789));
+    let env = FunctionEnv::new(
+      &mut store,
+      Env {
+        seed: shared_seed.clone(),
+      },
+    );
 
     let import_object = imports! {
               "env" => {
-                  "invert" => Function::new_typed(&mut store, invert)
+                  "rand" => Function::new_typed_with_env
+                  (&mut store, &env, rand)
               },
     };
 
@@ -192,6 +208,9 @@ impl Brains {
     let red_brains: HashMap<Id, Instance> = HashMap::new();
     Ok(Brains {
       store,
+      seed: Env {
+        seed: shared_seed.clone(),
+      },
       blue_modules,
       red_modules,
       blue_brains,
