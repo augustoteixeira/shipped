@@ -14,118 +14,10 @@ use wasmer::{
 };
 
 use crate::state::constants::NUM_TEMPLATES;
+use crate::state::encoder::decode;
 use crate::state::geometry::{Direction, Displace, Neighbor};
 use crate::state::materials::Materials;
-use crate::state::state::{Command, Id, Verb};
-
-fn decode_direction(code: u8) -> Option<Direction> {
-  match code {
-    0 => Some(Direction::North),
-    1 => Some(Direction::West),
-    2 => Some(Direction::East),
-    3 => Some(Direction::South),
-    _ => None,
-  }
-}
-
-fn decode_neighbor(code: u8) -> Option<Neighbor> {
-  match code {
-    0 => Some(Neighbor::Here),
-    1 => Some(Neighbor::North),
-    2 => Some(Neighbor::West),
-    3 => Some(Neighbor::East),
-    4 => Some(Neighbor::South),
-    _ => None,
-  }
-}
-
-fn decode_materials(code: u32) -> Materials {
-  let carbon: usize = (code & 0x000000FF).try_into().unwrap();
-  let silicon: usize = ((code & 0x0000FF00) >> 8).try_into().unwrap();
-  let plutonium: usize = ((code & 0x00FF0000) >> 16).try_into().unwrap();
-  let copper: usize = ((code & 0xFF000000) >> 24).try_into().unwrap();
-  Materials {
-    carbon,
-    silicon,
-    plutonium,
-    copper,
-  }
-}
-
-fn decode_displace(code: u16) -> Displace {
-  let x: u8 = ((code & 0xFF00) >> 8).try_into().unwrap();
-  let y: u8 = ((code & 0x00FF) >> 8).try_into().unwrap();
-  let signed_x = x as i8;
-  let signed_y = y as i8;
-  Displace {
-    x: x.into(),
-    y: y.into(),
-  }
-}
-
-fn decode(opcode: i64) -> Verb {
-  match (opcode & 0x00FF000000000000) >> 48 {
-    1 => Verb::Wait,
-    2 => {
-      // AttemptMove
-      if let Ok(code_direction) = ((opcode & 0x0000FF0000000000) >> 40).try_into() {
-        if let Some(direction) = decode_direction(code_direction) {
-          return Verb::AttemptMove(direction);
-        }
-      }
-      Verb::Wait
-    }
-    3 => {
-      // GetMaterials
-      if let Ok(code_neighbor) = ((opcode & 0x0000FF0000000000) >> 40).try_into() {
-        if let Some(neighbor) = decode_neighbor(code_neighbor) {
-          if let Ok(code_mat) = ((opcode & 0x00FFFFFFFF0000) >> 16).try_into() {
-            return Verb::GetMaterials(neighbor, decode_materials(code_mat));
-          }
-        }
-      }
-      Verb::Wait
-    }
-    4 => {
-      // DropMaterials
-      if let Ok(code_neighbor) = ((opcode & 0x0000FF0000000000) >> 40).try_into() {
-        if let Some(neighbor) = decode_neighbor(code_neighbor) {
-          if let Ok(code_mat) = ((opcode & 0x000000FFFFFFFF0000) >> 16).try_into() {
-            return Verb::DropMaterials(neighbor, decode_materials(code_mat));
-          }
-        }
-      }
-      Verb::Wait
-    }
-    5 => {
-      // Shoot
-      let code_displace: u16 = ((opcode & 0x0000FFFF00000000) >> 32).try_into().unwrap();
-      Verb::Shoot(decode_displace(code_displace))
-    }
-    6 => {
-      // Drill
-      if let Ok(code_direction) = ((opcode & 0x0000FF0000000000) >> 40).try_into() {
-        if let Some(direction) = decode_direction(code_direction) {
-          return Verb::Drill(direction);
-        }
-      }
-      Verb::Wait
-    }
-    7 => {
-      // Construct
-      if let Ok(template) = ((opcode & 0x0000FF0000000000) >> 40).try_into() {
-        if let Ok(code_direction) = ((opcode & 0x000000FF00000000) >> 32).try_into() {
-          if let Some(direction) = decode_direction(code_direction) {
-            return Verb::Construct(template, direction);
-          }
-        }
-      }
-      Verb::Wait
-    }
-    // TODO set message
-    _ => Verb::Wait,
-  }
-}
+use crate::state::state::{Command, Id, State, Verb};
 
 #[derive(Debug, Snafu)]
 pub enum BrainError {
@@ -153,7 +45,7 @@ pub enum ExecutionError {
 
 pub struct Brains {
   store: Store,
-  seed: Env,
+  env: Env,
   blue_modules: [Module; NUM_TEMPLATES],
   red_modules: [Module; NUM_TEMPLATES],
   blue_brains: HashMap<Id, Instance>,
@@ -162,35 +54,39 @@ pub struct Brains {
 
 #[derive(Clone)]
 struct Env {
-  seed: Arc<Mutex<u32>>,
+  state: Arc<Mutex<State>>,
+  current: Arc<Mutex<Id>>,
 }
 
-fn rand(env: FunctionEnvMut<Env>) -> u32 {
-  let mut seed = env.data().seed.lock().unwrap();
-  let seed64: u64 = *seed as u64;
-  *seed = ((1103515245 * seed64 + 12345) % (1 << 31)) as u32;
-  *seed
+fn get_coord(env: FunctionEnvMut<Env>) -> u32 {
+  let state = env.data().state.lock().unwrap();
+  let current = env.data().current.lock().unwrap();
+  let entity = state.get_entity_by_id(*current).unwrap();
+  entity.pos.x.try_into().unwrap()
 }
 
 impl Brains {
-  pub fn new(id_vec: Vec<usize>) -> Result<Self, BrainError> {
+  pub fn new(state: Arc<Mutex<State>>) -> Result<Self, BrainError> {
+    let id_vec = state.lock().unwrap().get_entities_ids();
     let mut store = Store::default();
-    let shared_seed = Arc::new(Mutex::new(123456789));
+
+    let current = Arc::new(Mutex::new(0));
     let env = FunctionEnv::new(
       &mut store,
       Env {
-        seed: shared_seed.clone(),
+        state: state.clone(),
+        current: current.clone(),
       },
     );
 
     let import_object = imports! {
               "env" => {
-                  "rand" => Function::new_typed_with_env
-                  (&mut store, &env, rand)
+                  "get_coord" => Function::new_typed_with_env
+                  (&mut store, &env, get_coord)
               },
     };
 
-    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/import.wasm")
+    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/coord.wasm")
       .context(LoadWasmSnafu { index: 0 as usize })?;
     let module =
       Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;
@@ -208,8 +104,9 @@ impl Brains {
     let red_brains: HashMap<Id, Instance> = HashMap::new();
     Ok(Brains {
       store,
-      seed: Env {
-        seed: shared_seed.clone(),
+      env: Env {
+        state: state.clone(),
+        current: current.clone(),
       },
       blue_modules,
       red_modules,
@@ -219,6 +116,10 @@ impl Brains {
   }
 
   pub fn get_command(&mut self, id: usize) -> Result<Command, ExecutionError> {
+    // in our enviroment, we first update the current bot
+    let mut current = self.env.current.lock().unwrap();
+    *current = id;
+    drop(current);
     let execute = self
       .blue_brains
       .get(&id)

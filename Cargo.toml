@@ -40,4 +40,5 @@ members = [
     "bots/up",
     "bots/zigzag",
     "bots/import",
+    "bots/coord",
 ]
