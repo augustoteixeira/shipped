@@ -14,7 +14,7 @@ use wasmer::{
 };
 
 use crate::state::constants::NUM_TEMPLATES;
-use crate::state::encoder::decode;
+use crate::state::encoder::{decode, encode_coord};
 use crate::state::geometry::{Direction, Displace, Neighbor};
 use crate::state::materials::Materials;
 use crate::state::state::{Command, Id, State, Verb};
@@ -62,7 +62,8 @@ fn get_coord(env: FunctionEnvMut<Env>) -> u32 {
   let state = env.data().state.lock().unwrap();
   let current = env.data().current.lock().unwrap();
   let entity = state.get_entity_by_id(*current).unwrap();
-  entity.pos.x.try_into().unwrap()
+  let pos = entity.pos;
+  encode_coord(pos.x, pos.y)
 }
 
 impl Brains {

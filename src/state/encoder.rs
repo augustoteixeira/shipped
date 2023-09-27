@@ -39,8 +39,8 @@ fn decode_materials(code: u32) -> Materials {
 fn decode_displace(code: u16) -> Displace {
   let x: u8 = ((code & 0xFF00) >> 8).try_into().unwrap();
   let y: u8 = ((code & 0x00FF) >> 8).try_into().unwrap();
-  let signed_x = x as i8;
-  let signed_y = y as i8;
+  let signed_x = i8::from_be_bytes([x]);
+  let signed_y = i8::from_be_bytes([y]);
   Displace {
     x: signed_x.into(),
     y: signed_y.into(),
@@ -109,4 +109,10 @@ pub fn decode(opcode: i64) -> Verb {
     // TODO set message
     _ => Verb::Wait,
   }
+}
+
+pub fn encode_coord(x: usize, y: usize) -> u32 {
+  let xprime: u16 = x.try_into().unwrap();
+  let yprime: u16 = y.try_into().unwrap();
+  ((xprime as u32) << 16) + (yprime as u32)
 }
