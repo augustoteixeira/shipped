@@ -2,7 +2,7 @@
 name = "shipped"
 version = "0.1.0"
 edition = "2021"
-default-run = "view"
+default-run = "gui"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
@@ -19,14 +19,6 @@ line_drawing = "1.0.0"
 init_array = "0.3.0"
 futures = "0.3"
 wasmer = "4.2.0"
-
-[[bin]]
-name = "main"
-path = "src/main.rs"
-
-[[bin]]
-name = "view"
-path = "src/view.rs"
 
 [[bin]]
 name = "gui"
