@@ -19,9 +19,7 @@ pub struct Message {
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq)]
 pub enum Team {
   Blue,
-  BlueGray,
   Red,
-  RedGray,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

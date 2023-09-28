@@ -145,7 +145,6 @@ pub async fn draw_entity(
   if let Some(e) = entity {
     let x = get_texture_x(&e);
     let y = match e.team {
-      Team::BlueGray | Team::RedGray => 0.0,
       Team::Blue => 16.0,
       Team::Red => 32.0,
     };
@@ -188,7 +187,6 @@ pub async fn draw_template_at(
 ) {
   let x = get_texture_template(&entity);
   let y = match team {
-    Team::BlueGray | Team::RedGray => 0.0,
     Team::Blue => 16.0,
     Team::Red => 32.0,
   };
@@ -229,7 +227,6 @@ pub async fn draw_active_entity(
   if let Some(e) = entity {
     let x = get_texture_active_x(&e);
     let y = match e.team {
-      Team::BlueGray | Team::RedGray => 0.0,
       Team::Blue => 16.0,
       Team::Red => 32.0,
     };

@@ -156,8 +156,8 @@ impl State {
       TemplateOutOfBoundsSnafu { template }
     );
     match team {
-      Team::Blue | Team::BlueGray => self.blue_templates[template].clone(),
-      Team::Red | Team::RedGray => self.red_templates[template].clone(),
+      Team::Blue => self.blue_templates[template].clone(),
+      Team::Red => self.red_templates[template].clone(),
     }
     .ok_or(StateError::NoTemplate { team, template })
   }

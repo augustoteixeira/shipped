@@ -10,9 +10,9 @@ use super::state::{State, StateError, Tile};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Placement {
-    pub template: usize,
-    pub pos: Pos,
-    pub grayed: bool,
+  pub template: usize,
+  pub pos: Pos,
+  pub grayed: bool,
 }
 
 // what is returned from the level editor:
@@ -23,35 +23,35 @@ pub struct Placement {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Squad {
-    pub codes: [Option<Code>; NUM_CODES],
-    pub templates: [Option<TemplateEntity>; NUM_TEMPLATES],
-    pub placements: Vec<Placement>,
+  pub codes: [Option<Code>; NUM_CODES],
+  pub templates: [Option<TemplateEntity>; NUM_TEMPLATES],
+  pub placements: Vec<Placement>,
 }
 
 #[derive(Debug, Snafu)]
 pub enum SquadError {
-    #[snafu(display("Wrong court side, team: {:?}, pos: {:?}", team, pos))]
-    WrongCourtSide { team: Team, pos: Pos },
-    #[snafu(display("Squad from {:?} contained outsider", team))]
-    WrongTeam { team: Team },
-    #[snafu(display(
-        "Placing template: {} from team: {:?} in pos: {:?}",
-        template,
-        team,
-        pos
-    ))]
-    BuildEntityError {
-        source: StateError,
-        team: Team,
-        template: usize,
-        pos: Pos,
-    },
+  #[snafu(display("Wrong court side, team: {:?}, pos: {:?}", team, pos))]
+  WrongCourtSide { team: Team, pos: Pos },
+  #[snafu(display("Squad from {:?} contained outsider", team))]
+  WrongTeam { team: Team },
+  #[snafu(display(
+    "Placing template: {} from team: {:?} in pos: {:?}",
+    template,
+    team,
+    pos
+  ))]
+  BuildEntityError {
+    source: StateError,
+    team: Team,
+    template: usize,
+    pos: Pos,
+  },
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Settings {
-    pub min_tokens: usize,
-    pub tiles: Vec<Tile>,
+  pub min_tokens: usize,
+  pub tiles: Vec<Tile>,
 }
 // implement comparison between Blueprints. It is used to
 // we require:
@@ -65,79 +65,71 @@ pub struct Settings {
 
 // implement conversion from two blueprints to one state
 pub fn build_state(
-    blue_squad: Squad,
-    red_squad: Squad,
-    settings: Settings,
+  blue_squad: Squad,
+  red_squad: Squad,
+  settings: Settings,
 ) -> Result<State, SquadError> {
-    let mut state = State::new(
-        settings.min_tokens,
-        blue_squad.codes,
-        red_squad.codes,
-        HashMap::new(),
-        blue_squad.templates,
-        red_squad.templates,
-        (0..(WIDTH * HEIGHT))
-            .map(|_| Tile {
-                entity_id: None,
-                materials: Materials {
-                    carbon: 0,
-                    silicon: 0,
-                    plutonium: 0,
-                    copper: 0,
-                },
-            })
-            .collect(),
+  let mut state = State::new(
+    settings.min_tokens,
+    blue_squad.codes,
+    red_squad.codes,
+    HashMap::new(),
+    blue_squad.templates,
+    red_squad.templates,
+    (0..(WIDTH * HEIGHT))
+      .map(|_| Tile {
+        entity_id: None,
+        materials: Materials {
+          carbon: 0,
+          silicon: 0,
+          plutonium: 0,
+          copper: 0,
+        },
+      })
+      .collect(),
+  );
+  state.tiles = settings.tiles;
+  for placement in blue_squad.placements {
+    ensure!(
+      placement.pos.y < HEIGHT / 2,
+      WrongCourtSideSnafu {
+        team: Team::Blue,
+        pos: placement.pos
+      }
     );
-    state.tiles = settings.tiles;
-    for placement in blue_squad.placements {
-        ensure!(
-            placement.pos.y < HEIGHT / 2,
-            WrongCourtSideSnafu {
-                team: Team::Blue,
-                pos: placement.pos
-            }
-        );
-        state
-            .build_entity_from_template(
-                if placement.grayed {
-                    Team::BlueGray
-                } else {
-                    Team::Blue
-                },
-                if placement.grayed { 0 } else { 1 },
-                placement.template,
-                placement.pos,
-            )
-            .context(BuildEntitySnafu {
-                team: Team::Blue,
-                template: placement.template,
-                pos: placement.pos,
-            })?;
-    }
-    for placement in red_squad.placements {
-        ensure!(
-            placement.pos.y >= HEIGHT / 2,
-            WrongCourtSideSnafu {
-                team: Team::Red,
-                pos: placement.pos
-            }
-        );
-        state
-            .build_entity_from_template(
-                if placement.grayed {
-                    Team::RedGray
-                } else {
-                    Team::Red
-                },
-                if placement.grayed { 0 } else { 1 },
-                placement.template,
-                placement.pos,
-            )
-            .context(BuildEntitySnafu {
-                team: Team::Red,
-                template: placement.template,
-                pos: placement.pos,
-            })?;
-    }
-    Ok(state)
+    state
+      .build_entity_from_template(
+        Team::Blue,
+        if placement.grayed { 0 } else { 1 },
+        placement.template,
+        placement.pos,
+      )
+      .context(BuildEntitySnafu {
+        team: Team::Blue,
+        template: placement.template,
+        pos: placement.pos,
+      })?;
+  }
+  for placement in red_squad.placements {
+    ensure!(
+      placement.pos.y >= HEIGHT / 2,
+      WrongCourtSideSnafu {
+        team: Team::Red,
+        pos: placement.pos
+      }
+    );
+    state
+      .build_entity_from_template(
+        Team::Red,
+        if placement.grayed { 0 } else { 1 },
+        placement.template,
+        placement.pos,
+      )
+      .context(BuildEntitySnafu {
+        team: Team::Red,
+        template: placement.template,
+        pos: placement.pos,
+      })?;
+  }
+  Ok(state)
 }
