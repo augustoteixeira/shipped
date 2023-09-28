@@ -80,6 +80,17 @@ pub enum Direction {
   West,
 }
 
+impl Direction {
+  pub fn invert(&self) -> Self {
+    match self {
+      Direction::North => Direction::South,
+      Direction::South => Direction::North,
+      Direction::East => Direction::West,
+      Direction::West => Direction::East,
+    }
+  }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum Neighbor {
   North,
@@ -87,6 +98,18 @@ pub enum Neighbor {
   South,
   West,
   Here,
+}
+
+impl Neighbor {
+  pub fn invert(&self) -> Self {
+    match self {
+      Neighbor::Here => Neighbor::Here,
+      Neighbor::North => Neighbor::South,
+      Neighbor::South => Neighbor::North,
+      Neighbor::East => Neighbor::West,
+      Neighbor::West => Neighbor::East,
+    }
+  }
 }
 
 impl Pos {
@@ -139,6 +162,12 @@ impl From<Neighbor> for Displace {
 impl Displace {
   pub fn new(x: i64, y: i64) -> Self {
     Displace { x, y }
+  }
+  pub fn invert(&self) -> Self {
+    Displace {
+      x: -self.x,
+      y: -self.y,
+    }
   }
   pub fn square_norm(&self) -> i64 {
     return self.x * self.x + self.y * self.y;

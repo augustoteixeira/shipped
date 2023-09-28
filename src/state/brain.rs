@@ -15,6 +15,7 @@ use wasmer::{
 
 use crate::state::constants::NUM_TEMPLATES;
 use crate::state::encoder::{decode, encode_coord};
+use crate::state::entity::Team;
 use crate::state::geometry::{Direction, Displace, Neighbor};
 use crate::state::materials::Materials;
 use crate::state::state::{Command, Id, State, Verb};
@@ -58,11 +59,16 @@ struct Env {
   current: Arc<Mutex<Id>>,
 }
 
+// the function that the bot uses to get its coordinate from the enviroment
 fn get_coord(env: FunctionEnvMut<Env>) -> u32 {
   let state = env.data().state.lock().unwrap();
   let current = env.data().current.lock().unwrap();
   let entity = state.get_entity_by_id(*current).unwrap();
-  let pos = entity.pos;
+  let pos = match entity.team {
+    Team::Blue => entity.pos,
+    Team::Red => entity.pos.invert(),
+    _ => unreachable!(),
+  };
   encode_coord(pos.x, pos.y)
 }
 
@@ -92,7 +98,6 @@ impl Brains {
     let module =
       Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;
 
-    // The module doesn't import anything, so we create an empty import object.
     let blue_modules: [Module; NUM_TEMPLATES] = init_array(|_| module.clone());
     let red_modules: [Module; NUM_TEMPLATES] = init_array(|_| module.clone());
     //let import_object = imports! {};
@@ -120,7 +125,11 @@ impl Brains {
     // in our enviroment, we first update the current bot
     let mut current = self.env.current.lock().unwrap();
     *current = id;
+    let state = self.env.state.lock().unwrap();
+    let entity = state.get_entity_by_id(*current).unwrap();
+    let team = entity.team.clone();
     drop(current);
+    drop(state);
     let execute = self
       .blue_brains
       .get(&id)
@@ -137,7 +146,11 @@ impl Brains {
     };
     Ok(Command {
       entity_id: id,
-      verb: decode(value),
+      verb: match team {
+        Team::Blue => decode(value),
+        Team::Red => decode(value).invert(),
+        _ => unreachable!(),
+      },
     })
   }
 }

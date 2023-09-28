@@ -53,7 +53,7 @@ pub fn enconde_diplace(disp: Displace) -> u16 {
   (x << 8) + y
 }
 
-pub fn encode(verb: Verb) -> i64 {
+pub fn encode_verb(verb: Verb) -> i64 {
   match verb {
     Verb::Wait => 0x0001000000000000,
     Verb::AttemptMove(dir) => {

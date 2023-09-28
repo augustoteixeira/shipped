@@ -61,6 +61,20 @@ pub enum Verb {
   SetMessage(Message),
 }
 
+impl Verb {
+  pub fn invert(&self) -> Self {
+    match self {
+      Verb::AttemptMove(dir) => Verb::AttemptMove(dir.invert()),
+      Verb::GetMaterials(n, m) => Verb::GetMaterials(n.invert().clone(), m.clone()),
+      Verb::DropMaterials(n, m) => Verb::DropMaterials(n.invert().clone(), m.clone()),
+      Verb::Shoot(d) => Verb::Shoot(d.invert().clone()),
+      Verb::Drill(d) => Verb::Drill(d.invert().clone()),
+      Verb::Construct(t, d) => Verb::Construct(*t, d.invert().clone()),
+      _ => self.clone(),
+    }
+  }
+}
+
 #[derive(Debug, Snafu)]
 pub enum StateError {
   #[snafu(display("Displace {:?} from {:?} out of bounds", disp, pos))]
