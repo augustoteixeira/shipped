@@ -34,4 +34,5 @@ members = [
     "bots/zigzag",
     "bots/import",
     "bots/coord",
+    "bots/bounce",
 ]

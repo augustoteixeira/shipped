@@ -80,3 +80,5 @@ pub fn difference(p1: Pos, p2: Pos) -> Displace {
 pub fn are_neighbors(p1: Pos, p2: Pos) -> bool {
   return difference(p1, p2).square_norm() == 1;
 }
+
+pub struct ViewingTile {}

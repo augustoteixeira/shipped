@@ -36,9 +36,9 @@ fn decode_materials(code: u32) -> Materials {
   }
 }
 
-fn decode_displace(code: u16) -> Displace {
+pub fn decode_displace(code: u16) -> Displace {
   let x: u8 = ((code & 0xFF00) >> 8).try_into().unwrap();
-  let y: u8 = ((code & 0x00FF) >> 8).try_into().unwrap();
+  let y: u8 = (code & 0x00FF).try_into().unwrap();
   let signed_x = i8::from_be_bytes([x]);
   let signed_y = i8::from_be_bytes([y]);
   Displace {

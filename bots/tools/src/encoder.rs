@@ -1,4 +1,4 @@
-use super::game::{Direction, Displace, Materials, Message, Neighbor};
+use super::game::{Direction, Displace, Materials, Message, Neighbor, ViewingTile};
 use std::cmp::{max, min};
 
 pub enum Verb {
@@ -45,7 +45,7 @@ pub fn encode_materials(mat: Materials) -> u32 {
   (copper << 24) + (plutonium << 16) + (silicon << 8) + carbon
 }
 
-pub fn enconde_diplace(disp: Displace) -> u16 {
+pub fn encode_displace(disp: Displace) -> u16 {
   let signed_x: i8 = min(max(disp.x, -127), 127).try_into().unwrap();
   let signed_y: i8 = min(max(disp.y, -127), 127).try_into().unwrap();
   let x: u16 = signed_x.to_be_bytes()[0] as u16;
@@ -61,5 +61,13 @@ pub fn encode_verb(verb: Verb) -> i64 {
       0x0002000000000000 + (dir_code << 40)
     }
     _ => 0x0001000000000000,
+  }
+}
+
+pub fn decode_tile(code: i64) -> Option<ViewingTile> {
+  match code {
+    0x0000000000000000 => None,
+    0x0000000000000001 => Some(ViewingTile {}),
+    _ => None,
   }
 }

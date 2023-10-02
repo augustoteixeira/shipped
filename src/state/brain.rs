@@ -14,9 +14,9 @@ use wasmer::{
 };
 
 use crate::state::constants::NUM_TEMPLATES;
-use crate::state::encoder::{decode, encode_coord};
+use crate::state::encoder::{decode, decode_displace, encode_coord};
 use crate::state::entity::Team;
-use crate::state::geometry::{Direction, Displace, Neighbor};
+use crate::state::geometry::{add_displace, Direction, Displace, Neighbor, Pos};
 use crate::state::materials::Materials;
 use crate::state::state::{Command, Id, State, Verb};
 
@@ -59,17 +59,40 @@ struct Env {
   current: Arc<Mutex<Id>>,
 }
 
-// the function that the bot uses to get its coordinate from the enviroment
-fn get_coord(env: FunctionEnvMut<Env>) -> u32 {
+fn get_unencoded_coord(env: FunctionEnvMut<Env>) -> Pos {
   let state = env.data().state.lock().unwrap();
   let current = env.data().current.lock().unwrap();
   let entity = state.get_entity_by_id(*current).unwrap();
-  let pos = match entity.team {
+  match entity.team {
     Team::Blue => entity.pos,
     Team::Red => entity.pos.invert(),
-    _ => unreachable!(),
-  };
+  }
+}
+
+// the function that the bot uses to get its coordinate from the enviroment
+fn get_coord(env: FunctionEnvMut<Env>) -> u32 {
+  let pos = get_unencoded_coord(env);
   encode_coord(pos.x, pos.y)
+}
+
+struct ViewingTile {}
+
+fn encode_tile(tile: Option<ViewingTile>) -> i64 {
+  match tile {
+    None => 0x0000000000000000,
+    Some(_) => 0x0000000000000001,
+  }
+}
+
+// the function that the bot uses to get a tile around it
+fn get_tile(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
+  let displ = decode_displace(encoded_displace);
+  let pos = get_unencoded_coord(env);
+  let tile: Option<ViewingTile> = match add_displace(pos, &displ) {
+    Err(_) => None,
+    Ok(_pos) => Some(ViewingTile {}),
+  };
+  encode_tile(tile)
 }
 
 impl Brains {
@@ -89,11 +112,13 @@ impl Brains {
     let import_object = imports! {
               "env" => {
                   "get_coord" => Function::new_typed_with_env
-                  (&mut store, &env, get_coord)
+                  (&mut store, &env, get_coord),
+                  "get_tile" => Function::new_typed_with_env
+                  (&mut store, &env, get_tile)
               },
     };
 
-    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/coord.wasm")
+    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/bounce.wasm")
       .context(LoadWasmSnafu { index: 0 as usize })?;
     let module =
       Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;

@@ -1,6 +1,7 @@
 Add WASM Coding
 ---------------
 
+- restrict get_tile to +- 3 displacement
 - build turret
 - build warrior
 - insert correct code from template
