@@ -1,5 +1,4 @@
-use super::encoder::Verb;
-use super::game::Direction;
+use super::game::{Direction, Verb};
 
 pub const GO_EAST: Verb = Verb::AttemptMove(Direction::East);
 pub const GO_WEST: Verb = Verb::AttemptMove(Direction::West);

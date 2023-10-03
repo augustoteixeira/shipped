@@ -1,6 +1,7 @@
 use crate::state::geometry::{Direction, Displace, Neighbor};
 use crate::state::materials::Materials;
 use crate::state::state::Verb;
+use std::cmp::min;
 
 fn decode_direction(code: u8) -> Option<Direction> {
   match code {
@@ -21,6 +22,14 @@ fn decode_neighbor(code: u8) -> Option<Neighbor> {
     4 => Some(Neighbor::South),
     _ => None,
   }
+}
+
+pub fn encode_materials(mat: Materials) -> u32 {
+  let carbon: u32 = min(mat.carbon, 255).try_into().unwrap();
+  let silicon: u32 = min(mat.silicon, 255).try_into().unwrap();
+  let plutonium: u32 = min(mat.plutonium, 255).try_into().unwrap();
+  let copper: u32 = min(mat.copper, 255).try_into().unwrap();
+  (copper << 24) + (plutonium << 16) + (silicon << 8) + carbon
 }
 
 fn decode_materials(code: u32) -> Materials {

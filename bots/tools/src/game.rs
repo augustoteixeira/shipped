@@ -15,6 +15,17 @@ pub struct Pos {
   pub y: usize,
 }
 
+pub enum Verb {
+  Wait,
+  AttemptMove(Direction),
+  GetMaterials(Neighbor, Materials),
+  DropMaterials(Neighbor, Materials),
+  Shoot(Displace),
+  Drill(Direction),
+  Construct(usize, Direction),
+  SetMessage(Message),
+}
+
 pub enum Direction {
   North,
   East,
@@ -81,4 +92,4 @@ pub fn are_neighbors(p1: Pos, p2: Pos) -> bool {
   return difference(p1, p2).square_norm() == 1;
 }
 
-pub struct ViewingTile {}
+pub struct TileEntity {}

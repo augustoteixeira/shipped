@@ -35,4 +35,5 @@ members = [
     "bots/import",
     "bots/coord",
     "bots/bounce",
+    "bots/eater",
 ]

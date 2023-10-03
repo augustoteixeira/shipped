@@ -14,7 +14,7 @@ use wasmer::{
 };
 
 use crate::state::constants::NUM_TEMPLATES;
-use crate::state::encoder::{decode, decode_displace, encode_coord};
+use crate::state::encoder::{decode, decode_displace, encode_coord, encode_materials};
 use crate::state::entity::Team;
 use crate::state::geometry::{add_displace, Direction, Displace, Neighbor, Pos};
 use crate::state::materials::Materials;
@@ -75,24 +75,41 @@ fn get_coord(env: FunctionEnvMut<Env>) -> u32 {
   encode_coord(pos.x, pos.y)
 }
 
-struct ViewingTile {}
-
-fn encode_tile(tile: Option<ViewingTile>) -> i64 {
-  match tile {
-    None => 0x0000000000000000,
-    Some(_) => 0x0000000000000001,
-  }
+// the function that the bot uses to get the materials in a tile around it
+fn get_materials(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
+  let displ = decode_displace(encoded_displace);
+  let state = env.data().state.lock().unwrap();
+  let current = env.data().current.lock().unwrap();
+  let entity = state.get_entity_by_id(*current).unwrap();
+  let pos = match entity.team {
+    Team::Blue => entity.pos,
+    Team::Red => entity.pos.invert(),
+  };
+  let tile: Option<Materials> = match add_displace(pos, &displ) {
+    Err(_) => {
+      return 0x0000000000000000;
+    }
+    Ok(target_pos) => {
+      let materials = state.get_floor_mat(target_pos);
+      return (encode_materials(materials.clone()) as i64) + 0x0001000000000000;
+    }
+  };
 }
 
-// the function that the bot uses to get a tile around it
-fn get_tile(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
+// the function that the bot uses to get the bot in a tile around it
+fn get_entity(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
   let displ = decode_displace(encoded_displace);
   let pos = get_unencoded_coord(env);
-  let tile: Option<ViewingTile> = match add_displace(pos, &displ) {
+  let tile: Option<Materials> = match add_displace(pos, &displ) {
     Err(_) => None,
-    Ok(_pos) => Some(ViewingTile {}),
+    Ok(_pos) => Some(Materials {
+      carbon: 0,
+      silicon: 0,
+      plutonium: 0,
+      copper: 0,
+    }),
   };
-  encode_tile(tile)
+  0
 }
 
 impl Brains {
@@ -113,12 +130,14 @@ impl Brains {
               "env" => {
                   "get_coord" => Function::new_typed_with_env
                   (&mut store, &env, get_coord),
-                  "get_tile" => Function::new_typed_with_env
-                  (&mut store, &env, get_tile)
+                  "get_materials" => Function::new_typed_with_env
+                  (&mut store, &env, get_materials),
+                  "get_entity" => Function::new_typed_with_env
+                  (&mut store, &env, get_entity)
               },
     };
 
-    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/bounce.wasm")
+    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/eater.wasm")
       .context(LoadWasmSnafu { index: 0 as usize })?;
     let module =
       Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;

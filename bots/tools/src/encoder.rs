@@ -1,16 +1,5 @@
-use super::game::{Direction, Displace, Materials, Message, Neighbor, ViewingTile};
+use super::game::{Direction, Displace, Materials, Message, Neighbor, Verb};
 use std::cmp::{max, min};
-
-pub enum Verb {
-  Wait,
-  AttemptMove(Direction),
-  GetMaterials(Neighbor, Materials),
-  DropMaterials(Neighbor, Materials),
-  Shoot(Displace),
-  Drill(Direction),
-  Construct(usize, Direction),
-  SetMessage(Message),
-}
 
 pub fn decode_coord(code: u32) -> (usize, usize) {
   let x = (code >> 16) as usize;
@@ -64,10 +53,25 @@ pub fn encode_verb(verb: Verb) -> i64 {
   }
 }
 
-pub fn decode_tile(code: i64) -> Option<ViewingTile> {
-  match code {
-    0x0000000000000000 => None,
-    0x0000000000000001 => Some(ViewingTile {}),
+fn decode_materials(code: u32) -> Materials {
+  let carbon: usize = (code & 0x000000FF).try_into().unwrap();
+  let silicon: usize = ((code & 0x0000FF00) >> 8).try_into().unwrap();
+  let plutonium: usize = ((code & 0x00FF0000) >> 16).try_into().unwrap();
+  let copper: usize = ((code & 0xFF000000) >> 24).try_into().unwrap();
+  Materials {
+    carbon,
+    silicon,
+    plutonium,
+    copper,
+  }
+}
+
+pub fn decode_tile_materials(code: i64) -> Option<Materials> {
+  match (code & 0x00FF000000000000) >> 48 {
+    0x00 => None,
+    0x01 => Some(decode_materials(
+      (code & 0x00000000FFFFFFFF).try_into().unwrap(),
+    )),
     _ => None,
   }
 }
