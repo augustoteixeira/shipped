@@ -147,6 +147,9 @@ impl State {
   pub fn get_tile(&self, pos: Pos) -> &Tile {
     &self.tiles[pos.to_index()]
   }
+  pub fn get_mut_tile(&mut self, pos: Pos) -> &mut Tile {
+    &mut self.tiles[pos.to_index()]
+  }
   pub fn get_floor_mat(&self, pos: Pos) -> &Materials {
     &self.tiles[pos.to_index()].materials
   }

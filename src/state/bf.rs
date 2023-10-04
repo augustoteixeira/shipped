@@ -216,6 +216,8 @@ pub fn build_state(level: &BFState, blue: &BFState, red: &BFState) -> State {
         }
       }
     }
+    state.get_mut_tile(pos).materials = blue.tiles[pos.to_index()].materials.clone();
+    state.get_mut_tile(pos.invert()).materials = red.tiles[pos.to_index()].materials.clone();
   }
   state
 }

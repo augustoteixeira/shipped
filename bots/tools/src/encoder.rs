@@ -49,6 +49,29 @@ pub fn encode_verb(verb: Verb) -> i64 {
       let dir_code = encode_direction(dir) as i64;
       0x0002000000000000 + (dir_code << 40)
     }
+    Verb::GetMaterials(neigh, mat) => {
+      let neigh_code = encode_neighbor(neigh);
+      let mat_code = encode_materials(mat);
+      0x0003000000000000 + ((neigh_code as i64) << 40) + (mat_code as i64)
+    }
+    Verb::DropMaterials(neigh, mat) => {
+      let neigh_code = encode_neighbor(neigh);
+      let mat_code = encode_materials(mat);
+      0x0004000000000000 + ((neigh_code as i64) << 40) + (mat_code as i64)
+    }
+    Verb::Shoot(displ) => {
+      let displ_code = encode_displace(displ);
+      0x0005000000000000 + ((displ_code as i64) << 32)
+    }
+    Verb::Drill(dir) => {
+      let dir_code = encode_direction(dir) as i64;
+      0x0006000000000000 + (dir_code << 40)
+    }
+    Verb::Construct(template, direction) => {
+      let template_code: u8 = template.try_into().unwrap();
+      let dir_code = encode_direction(direction) as i64;
+      0x0007000000000000 + ((template_code as i64) << 40) + (dir_code << 32)
+    }
     _ => 0x0001000000000000,
   }
 }

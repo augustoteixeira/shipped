@@ -56,7 +56,7 @@ pub fn decode_displace(code: u16) -> Displace {
   }
 }
 
-pub fn decode(opcode: i64) -> Verb {
+pub fn decode_verb(opcode: i64) -> Verb {
   match (opcode & 0x00FF000000000000) >> 48 {
     1 => Verb::Wait,
     2 => {
@@ -72,7 +72,7 @@ pub fn decode(opcode: i64) -> Verb {
       // GetMaterials
       if let Ok(code_neighbor) = ((opcode & 0x0000FF0000000000) >> 40).try_into() {
         if let Some(neighbor) = decode_neighbor(code_neighbor) {
-          if let Ok(code_mat) = ((opcode & 0x00FFFFFFFF0000) >> 16).try_into() {
+          if let Ok(code_mat) = (opcode & 0x000000FFFFFFFF).try_into() {
             return Verb::GetMaterials(neighbor, decode_materials(code_mat));
           }
         }

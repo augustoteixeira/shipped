@@ -14,11 +14,11 @@ use wasmer::{
 };
 
 use crate::state::constants::NUM_TEMPLATES;
-use crate::state::encoder::{decode, decode_displace, encode_coord, encode_materials};
+use crate::state::encoder::{decode_displace, decode_verb, encode_coord, encode_materials};
 use crate::state::entity::Team;
-use crate::state::geometry::{add_displace, Direction, Displace, Neighbor, Pos};
+use crate::state::geometry::{add_displace, Pos};
 use crate::state::materials::Materials;
-use crate::state::state::{Command, Id, State, Verb};
+use crate::state::state::{Command, Id, State};
 
 #[derive(Debug, Snafu)]
 pub enum BrainError {
@@ -77,15 +77,15 @@ fn get_coord(env: FunctionEnvMut<Env>) -> u32 {
 
 // the function that the bot uses to get the materials in a tile around it
 fn get_materials(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
-  let displ = decode_displace(encoded_displace);
   let state = env.data().state.lock().unwrap();
   let current = env.data().current.lock().unwrap();
   let entity = state.get_entity_by_id(*current).unwrap();
-  let pos = match entity.team {
-    Team::Blue => entity.pos,
-    Team::Red => entity.pos.invert(),
+  let pos = entity.pos;
+  let displ = match entity.team {
+    Team::Blue => decode_displace(encoded_displace),
+    Team::Red => decode_displace(encoded_displace).invert(),
   };
-  let tile: Option<Materials> = match add_displace(pos, &displ) {
+  match add_displace(pos, &displ) {
     Err(_) => {
       return 0x0000000000000000;
     }
@@ -100,7 +100,7 @@ fn get_materials(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
 fn get_entity(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
   let displ = decode_displace(encoded_displace);
   let pos = get_unencoded_coord(env);
-  let tile: Option<Materials> = match add_displace(pos, &displ) {
+  match add_displace(pos, &displ) {
     Err(_) => None,
     Ok(_pos) => Some(Materials {
       carbon: 0,
@@ -191,8 +191,8 @@ impl Brains {
     Ok(Command {
       entity_id: id,
       verb: match team {
-        Team::Blue => decode(value),
-        Team::Red => decode(value).invert(),
+        Team::Blue => decode_verb(value),
+        Team::Red => decode_verb(value).invert(),
         _ => unreachable!(),
       },
     })
@@ -206,42 +206,5 @@ fn random_material(rng: &mut ChaCha8Rng) -> Materials {
     silicon: if material_type == 1 { 1 } else { 0 },
     plutonium: if material_type == 2 { 1 } else { 0 },
     copper: if material_type == 3 { 1 } else { 0 },
-  }
-}
-
-fn random_direction(rng: &mut ChaCha8Rng) -> Direction {
-  match rng.gen_range(0..4) {
-    0 => Direction::North,
-    1 => Direction::East,
-    2 => Direction::South,
-    _ => Direction::West,
-  }
-}
-
-fn random_neighbor(rng: &mut ChaCha8Rng) -> Neighbor {
-  match rng.gen_range(0..5) {
-    0 => Neighbor::North,
-    1 => Neighbor::East,
-    2 => Neighbor::South,
-    3 => Neighbor::West,
-    _ => Neighbor::Here,
-  }
-}
-
-fn random_vicinity(rng: &mut ChaCha8Rng) -> Displace {
-  Displace::new(
-    rng.gen_range(0..11) as i64 - 5,
-    rng.gen_range(0..11) as i64 - 5,
-  )
-}
-
-pub fn random_verb(rng: &mut ChaCha8Rng) -> Verb {
-  match rng.gen_range(0..7) {
-    0 => Verb::AttemptMove(random_direction(rng)),
-    1 => Verb::GetMaterials(random_neighbor(rng), random_material(rng)),
-    2 => Verb::DropMaterials(random_neighbor(rng), random_material(rng)),
-    3 => Verb::Shoot(random_vicinity(rng)),
-    4 => Verb::Construct(rng.gen_range(0..NUM_TEMPLATES), random_direction(rng)),
-    _ => Verb::Drill(random_direction(rng)),
   }
 }
