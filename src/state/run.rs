@@ -25,15 +25,18 @@ pub fn run_match(
     let mut frame = vec![];
     let id_vec = state.lock().unwrap().get_entities_ids();
     for id in id_vec {
-      match brains.get_command(id) {
-        Ok(command) => {
-          if let Ok(_) = state.lock().unwrap().execute_command(command.clone()) {
-            frame.push(command.clone());
+      let exists = matches!(state.lock().unwrap().get_entity_by_id(id), Ok(_));
+      if exists {
+        match brains.get_command(id) {
+          Ok(command) => {
+            if let Ok(_) = state.lock().unwrap().execute_command(command.clone()) {
+              frame.push(command.clone());
+            }
           }
-        }
-        Err(e) => {
-          println!("{:}", e);
-        }
+          Err(e) => {
+            println!("{:}", e);
+          }
+        };
       }
     }
     frames.push(frame);

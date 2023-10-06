@@ -99,7 +99,6 @@ impl ActiveEntity {
     self.team = match self.team {
       Team::Blue => Team::Red,
       Team::Red => Team::Blue,
-      _ => unimplemented!(),
     }
   }
 }

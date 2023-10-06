@@ -178,7 +178,6 @@ impl State {
     match team {
       Team::Blue => self.blue_tokens += tokens,
       Team::Red => self.red_tokens += tokens,
-      _ => {}
     };
     self.entities.insert(self.next_unique_id, entity);
     self.tiles[pos.to_index()].entity_id = Some(self.next_unique_id);
@@ -214,7 +213,6 @@ impl State {
     match self.get_entity_by_id(id)?.team {
       Team::Blue => self.blue_tokens -= entity.tokens,
       Team::Red => self.red_tokens -= entity.tokens,
-      _ => {}
     };
     if self.blue_tokens < self.min_tokens {
       self.game_status = GameStatus::RedWon

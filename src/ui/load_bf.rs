@@ -409,7 +409,6 @@ impl Ui for LoadBF {
           let (relevant_squad, relevant_index) = match team {
             Team::Blue => (blue_squad, blue_index),
             Team::Red => (red_squad, red_index),
-            _ => unimplemented!(),
           };
           let s_prime = plus_minus(&input, *relevant_index, *sign);
           match load_squad_file(*level, s_prime) {

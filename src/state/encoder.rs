@@ -1,4 +1,5 @@
-use crate::state::geometry::{Direction, Displace, Neighbor};
+use crate::state::entity::{Action, ActiveEntity, Message, MovementType, Team};
+use crate::state::geometry::{Direction, Displace, Neighbor, Pos};
 use crate::state::materials::Materials;
 use crate::state::state::Verb;
 use std::cmp::min;
@@ -42,6 +43,88 @@ fn decode_materials(code: u32) -> Materials {
     silicon,
     plutonium,
     copper,
+  }
+}
+
+pub enum ViewAction {
+  Wait,
+  Move(Direction),
+  GetMaterials(Neighbor),
+  DropMaterials(Neighbor),
+  Shoot(Displace),
+  Drill(Direction),
+  Construct(Direction),
+  SetMessage(Message),
+}
+
+pub struct ViewedEntity {
+  pub pos: Pos,                    // 00-15 16 bits
+  pub hp: usize,                   // 16-23 8 bits
+  pub gun_damage: usize,           // 24-27 4 bits
+  pub drill_damage: usize,         // 28-31 4 bits
+  pub team: Team,                  // 32-32 1 bit
+  pub movement_type: MovementType, // 33-33 1 bit
+  pub inventory_size: usize,       // 34-41 8 bits
+  pub tokens: usize,               // 42-45 4 bits (total 46?)
+  pub last_action: ViewAction,     // TODO: implement vieweing last action
+}
+
+impl From<ActiveEntity> for ViewedEntity {
+  fn from(entity: ActiveEntity) -> Self {
+    ViewedEntity {
+      tokens: entity.tokens,
+      team: entity.team,
+      pos: entity.pos,
+      hp: entity.hp,
+      inventory_size: entity.inventory_size,
+      movement_type: entity.movement_type,
+      gun_damage: entity.gun_damage,
+      drill_damage: entity.drill_damage,
+      last_action: ViewAction::Wait, // TODO: implement vieweing last action
+    }
+  }
+}
+
+pub enum ViewResult {
+  OutOfBounds,
+  Empty,
+  Entity(ViewedEntity),
+  Error,
+}
+
+pub fn encode_pos(pos: Pos) -> u16 {
+  let xprime: u8 = pos.x.try_into().unwrap();
+  let yprime: u8 = pos.y.try_into().unwrap();
+  ((xprime as u16) << 8) + (yprime as u16)
+}
+
+pub fn encode_entity(entity: ViewedEntity) -> i64 {
+  let mut result: i64 = 0x0000000000000000;
+  result += encode_pos(entity.pos) as i64;
+  result += (min(entity.hp, 255) as i64) << 16;
+  result += (min(entity.gun_damage, 16) as i64) << 24;
+  result += (min(entity.drill_damage, 16) as i64) << 28;
+  result += (match entity.team {
+    Team::Blue => 0,
+    Team::Red => 1,
+  } as i64)
+    << 32;
+  result += (match entity.movement_type {
+    MovementType::Still => 0,
+    MovementType::Walk => 1,
+  } as i64)
+    << 33;
+  result += (min(entity.inventory_size, 256) as i64) << 34;
+  result += (min(entity.tokens, 16) as i64) << 42;
+  result
+}
+
+pub fn encode_view(view_result: ViewResult) -> i64 {
+  match view_result {
+    ViewResult::OutOfBounds => 0x0000000000000000,
+    ViewResult::Empty => 0x0100000000000000,
+    ViewResult::Entity(entity) => 0x0200000000000000 + encode_entity(entity),
+    ViewResult::Error => 0x0300000000000000,
   }
 }
 

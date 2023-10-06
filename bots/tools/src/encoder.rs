@@ -1,4 +1,7 @@
-use super::game::{Direction, Displace, Materials, Message, Neighbor, Verb};
+use super::game::{
+  Direction, Displace, Materials, MovementType, Neighbor, Pos, Team, Verb, ViewAction, ViewResult,
+  ViewedEntity,
+};
 use std::cmp::{max, min};
 
 pub fn decode_coord(code: u32) -> (usize, usize) {
@@ -96,5 +99,49 @@ pub fn decode_tile_materials(code: i64) -> Option<Materials> {
       (code & 0x00000000FFFFFFFF).try_into().unwrap(),
     )),
     _ => None,
+  }
+}
+
+pub fn decode_pos(code: u16) -> Pos {
+  Pos {
+    x: (code & 0x00FF).try_into().unwrap(),
+    y: (code << 8).try_into().unwrap(),
+  }
+}
+
+pub fn decode_view(code: i64) -> ViewResult {
+  match (code & 0x0F00000000000000) >> 56 {
+    0 => ViewResult::OutOfBounds,
+    1 => ViewResult::Empty,
+    2 => ViewResult::Entity(decode_entity(code & 0x0000FFFFFFFFFFFF)),
+    _ => ViewResult::Error,
+  }
+}
+
+pub fn decode_entity(code: i64) -> ViewedEntity {
+  let pos = decode_pos((code & 0x000000000000FFFF) as u16);
+  let hp: usize = ((code & 0x0000000000FF0000) >> 16) as usize;
+  let gun_damage: usize = ((code & 0x000000000F000000) >> 24) as usize;
+  let drill_damage: usize = ((code & 0x00000000F0000000) >> 28) as usize;
+  let team: Team = match code & 0x0000000100000000 {
+    0 => Team::Blue,
+    _ => Team::Red,
+  };
+  let movement_type: MovementType = match code & 0x0000000200000000 {
+    0 => MovementType::Still,
+    _ => MovementType::Walk,
+  };
+  let inventory_size: usize = ((code & 0x0000003FC0000000) >> 34) as usize;
+  let tokens: usize = ((code & 0x000003C000000000) >> 42) as usize;
+  ViewedEntity {
+    tokens,
+    team,
+    pos,
+    hp,
+    inventory_size,
+    movement_type,
+    gun_damage,
+    drill_damage,
+    last_action: ViewAction::Wait, // TODO: implement view last action
   }
 }

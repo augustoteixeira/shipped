@@ -5,8 +5,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use init_array::init_array;
-use rand::prelude::*;
-use rand_chacha::ChaCha8Rng;
 use std::collections::HashMap;
 use wasmer::{
   imports, CompileError, ExportError, Function, FunctionEnv, FunctionEnvMut, Instance,
@@ -14,10 +12,11 @@ use wasmer::{
 };
 
 use crate::state::constants::NUM_TEMPLATES;
-use crate::state::encoder::{decode_displace, decode_verb, encode_coord, encode_materials};
+use crate::state::encoder::{
+  decode_displace, decode_verb, encode_coord, encode_materials, encode_view, ViewResult,
+};
 use crate::state::entity::Team;
 use crate::state::geometry::{add_displace, Pos};
-use crate::state::materials::Materials;
 use crate::state::state::{Command, Id, State};
 
 #[derive(Debug, Snafu)]
@@ -93,23 +92,29 @@ fn get_materials(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
       let materials = state.get_floor_mat(target_pos);
       return (encode_materials(materials.clone()) as i64) + 0x0001000000000000;
     }
-  };
+  }
 }
 
 // the function that the bot uses to get the bot in a tile around it
 fn get_entity(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
-  let displ = decode_displace(encoded_displace);
-  let pos = get_unencoded_coord(env);
-  match add_displace(pos, &displ) {
-    Err(_) => None,
-    Ok(_pos) => Some(Materials {
-      carbon: 0,
-      silicon: 0,
-      plutonium: 0,
-      copper: 0,
-    }),
+  let state = env.data().state.lock().unwrap();
+  let current = env.data().current.lock().unwrap();
+  let entity = state.get_entity_by_id(*current).unwrap();
+  let pos = entity.pos;
+  let displ = match entity.team {
+    Team::Blue => decode_displace(encoded_displace),
+    Team::Red => decode_displace(encoded_displace).invert(),
   };
-  0
+  encode_view(match state.get_visible(pos, &displ) {
+    None => ViewResult::OutOfBounds,
+    Some(viewed_pos) => match state.get_tile(viewed_pos).entity_id {
+      None => ViewResult::Empty,
+      Some(viewed_entity_id) => match state.get_entity_by_id(viewed_entity_id) {
+        Err(_) => ViewResult::Error,
+        Ok(viewed_entity) => ViewResult::Entity(viewed_entity.clone().into()),
+      },
+    },
+  })
 }
 
 impl Brains {
@@ -137,7 +142,7 @@ impl Brains {
               },
     };
 
-    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/eater.wasm")
+    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/driller.wasm")
       .context(LoadWasmSnafu { index: 0 as usize })?;
     let module =
       Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;
@@ -193,18 +198,7 @@ impl Brains {
       verb: match team {
         Team::Blue => decode_verb(value),
         Team::Red => decode_verb(value).invert(),
-        _ => unreachable!(),
       },
     })
-  }
-}
-
-fn random_material(rng: &mut ChaCha8Rng) -> Materials {
-  let material_type = rng.gen_range(0..4);
-  Materials {
-    carbon: if material_type == 0 { 1 } else { 0 },
-    silicon: if material_type == 1 { 1 } else { 0 },
-    plutonium: if material_type == 2 { 1 } else { 0 },
-    copper: if material_type == 3 { 1 } else { 0 },
   }
 }
