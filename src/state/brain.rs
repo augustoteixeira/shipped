@@ -11,7 +11,7 @@ use wasmer::{
   InstantiationError, Module, RuntimeError, Store, Value,
 };
 
-use crate::state::constants::NUM_TEMPLATES;
+use crate::state::constants::{NUM_TEMPLATES, RANGE};
 use crate::state::encoder::{
   decode_displace, decode_verb, encode_coord, encode_materials, encode_view, ViewResult,
 };
@@ -84,6 +84,9 @@ fn get_materials(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
     Team::Blue => decode_displace(encoded_displace),
     Team::Red => decode_displace(encoded_displace).invert(),
   };
+  if (displ.x < -RANGE) && (displ.x > RANGE) && (displ.y < -RANGE) && (displ.y > RANGE) {
+    return 0x0000000000000000;
+  }
   match add_displace(pos, &displ) {
     Err(_) => {
       return 0x0000000000000000;
@@ -105,6 +108,9 @@ fn get_entity(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
     Team::Blue => decode_displace(encoded_displace),
     Team::Red => decode_displace(encoded_displace).invert(),
   };
+  if (displ.x < -RANGE) && (displ.x > RANGE) && (displ.y < -RANGE) && (displ.y > RANGE) {
+    return encode_view(ViewResult::OutOfBounds);
+  }
   encode_view(match state.get_visible(pos, &displ) {
     None => ViewResult::OutOfBounds,
     Some(viewed_pos) => match state.get_tile(viewed_pos).entity_id {
@@ -142,7 +148,7 @@ impl Brains {
               },
     };
 
-    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/driller.wasm")
+    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/mover.wasm")
       .context(LoadWasmSnafu { index: 0 as usize })?;
     let module =
       Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;

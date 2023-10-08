@@ -10,6 +10,7 @@ pub struct Materials {
   pub copper: usize,
 }
 
+#[derive(Clone)]
 pub struct Pos {
   pub x: usize,
   pub y: usize,
