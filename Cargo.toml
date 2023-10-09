@@ -32,7 +32,7 @@ members = [
     "bots/tools",
     "bots/up",
     "bots/zigzag",
-    "bots/import",
+    "bots/walker",
     "bots/coord",
     "bots/bounce",
     "bots/eater",

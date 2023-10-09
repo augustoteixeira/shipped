@@ -1,34 +1,31 @@
-use super::abbrev::{GO_EAST, GO_NORTH, GO_SOUTH, GO_WEST, WAIT};
-use super::encoder::{decode_coord, encode_verb};
-use super::game::Pos;
-use std::cmp::Ordering;
+use super::game::{Pos, Verb};
+use super::mover::{Mover, MoverState};
 
-extern "C" {
-  fn get_coord() -> u32;
-}
-
-pub type ExplorerState = Pos;
+pub type ExplorerState = MoverState;
 
 pub struct Explorer {
-  pointer: *mut Pos,
+  pointer: *mut MoverState,
+}
+
+extern "C" {
+  fn get_rand() -> u32;
 }
 
 impl Explorer {
-  pub fn new(pointer: *mut Pos) -> Self {
+  pub fn new(pointer: *mut ExplorerState) -> Self {
     Explorer { pointer }
   }
-  pub fn next(&self) -> i64 {
-    let code = unsafe { get_coord() };
-    let (x, y) = decode_coord(code);
-    let target: Pos = unsafe { (*(self.pointer as *mut Pos)).clone() };
-    match x.cmp(&target.x) {
-      Ordering::Less => encode_verb(GO_EAST),
-      Ordering::Greater => encode_verb(GO_WEST),
-      Ordering::Equal => match y.cmp(&target.y) {
-        Ordering::Less => encode_verb(GO_NORTH),
-        Ordering::Greater => encode_verb(GO_SOUTH),
-        Ordering::Equal => encode_verb(WAIT),
-      },
+  pub fn next(&self) -> Verb {
+    let mover = Mover::new(self.pointer as *mut MoverState);
+    let move_verb = mover.next();
+    if let Verb::Wait = move_verb {
+      unsafe {
+        let x = (get_rand() % 64) as usize;
+        let y = (get_rand() % 64) as usize;
+        let target = self.pointer as *mut Pos;
+        *target = Pos { x, y };
+      }
     }
+    move_verb
   }
 }

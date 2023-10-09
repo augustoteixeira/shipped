@@ -1,5 +1,8 @@
 extern crate rand;
-extern crate rand_chacha;
+
+use rand::rngs::StdRng;
+use rand::Rng;
+use rand::SeedableRng;
 use snafu::prelude::*;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -56,6 +59,7 @@ pub struct Brains {
 struct Env {
   state: Arc<Mutex<State>>,
   current: Arc<Mutex<Id>>,
+  rng: Arc<Mutex<StdRng>>,
 }
 
 fn get_unencoded_coord(env: FunctionEnvMut<Env>) -> Pos {
@@ -74,6 +78,12 @@ fn get_coord(env: FunctionEnvMut<Env>) -> u32 {
   encode_coord(pos.x, pos.y)
 }
 
+// the function that the bot uses to get its coordinate from the enviroment
+fn get_rand(env: FunctionEnvMut<Env>) -> u32 {
+  let mut rng = env.data().rng.lock().unwrap();
+  rng.gen_range(0..0xFFFFFFFF)
+}
+
 // the function that the bot uses to get the materials in a tile around it
 fn get_materials(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
   let state = env.data().state.lock().unwrap();
@@ -84,7 +94,11 @@ fn get_materials(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
     Team::Blue => decode_displace(encoded_displace),
     Team::Red => decode_displace(encoded_displace).invert(),
   };
-  if (displ.x < -RANGE) && (displ.x > RANGE) && (displ.y < -RANGE) && (displ.y > RANGE) {
+  if (displ.x < -(RANGE as i64))
+    && (displ.x > RANGE as i64)
+    && (displ.y < -(RANGE as i64))
+    && (displ.y > RANGE as i64)
+  {
     return 0x0000000000000000;
   }
   match add_displace(pos, &displ) {
@@ -108,7 +122,11 @@ fn get_entity(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
     Team::Blue => decode_displace(encoded_displace),
     Team::Red => decode_displace(encoded_displace).invert(),
   };
-  if (displ.x < -RANGE) && (displ.x > RANGE) && (displ.y < -RANGE) && (displ.y > RANGE) {
+  if (displ.x < -(RANGE as i64))
+    && (displ.x > RANGE as i64)
+    && (displ.y < -(RANGE as i64))
+    && (displ.y > RANGE as i64)
+  {
     return encode_view(ViewResult::OutOfBounds);
   }
   encode_view(match state.get_visible(pos, &displ) {
@@ -129,11 +147,13 @@ impl Brains {
     let mut store = Store::default();
 
     let current = Arc::new(Mutex::new(0));
+    let rng = Arc::new(Mutex::new(StdRng::from_entropy()));
     let env = FunctionEnv::new(
       &mut store,
       Env {
         state: state.clone(),
         current: current.clone(),
+        rng: rng.clone(),
       },
     );
 
@@ -144,11 +164,13 @@ impl Brains {
                   "get_materials" => Function::new_typed_with_env
                   (&mut store, &env, get_materials),
                   "get_entity" => Function::new_typed_with_env
-                  (&mut store, &env, get_entity)
+                  (&mut store, &env, get_entity),
+                  "get_rand" => Function::new_typed_with_env
+                  (&mut store, &env, get_rand)
               },
     };
 
-    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/mover.wasm")
+    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/explorer.wasm")
       .context(LoadWasmSnafu { index: 0 as usize })?;
     let module =
       Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;
@@ -168,6 +190,7 @@ impl Brains {
       env: Env {
         state: state.clone(),
         current: current.clone(),
+        rng: rng.clone(),
       },
       blue_modules,
       red_modules,
