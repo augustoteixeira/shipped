@@ -1,4 +1,3 @@
-use tools::abbrev::WAIT;
 use tools::encoder::encode_verb;
 use tools::explorer::{Explorer, ExplorerState};
 use tools::game::Pos;
