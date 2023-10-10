@@ -135,7 +135,14 @@ fn get_entity(env: FunctionEnvMut<Env>, encoded_displace: u16) -> i64 {
       None => ViewResult::Empty,
       Some(viewed_entity_id) => match state.get_entity_by_id(viewed_entity_id) {
         Err(_) => ViewResult::Error,
-        Ok(viewed_entity) => ViewResult::Entity(viewed_entity.clone().into()),
+        Ok(viewed_entity) => ViewResult::Entity(match entity.team {
+          Team::Blue => viewed_entity.clone().into(),
+          Team::Red => {
+            let mut inverted_color = viewed_entity.clone();
+            inverted_color.team = inverted_color.team.invert();
+            inverted_color.into()
+          }
+        }),
       },
     },
   })

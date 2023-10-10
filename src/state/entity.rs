@@ -22,6 +22,15 @@ pub enum Team {
   Red,
 }
 
+impl Team {
+  pub fn invert(&self) -> Self {
+    match self {
+      Team::Blue => Team::Red,
+      Team::Red => Team::Blue,
+    }
+  }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum Action {
   Wait,

@@ -1,7 +1,7 @@
 use tools::driller;
-use tools::encoder::{decode_view, encode_displace, encode_verb};
+use tools::encoder::encode_verb;
 use tools::explorer::{Explorer, ExplorerState};
-use tools::game::{Direction, Displace, Pos, Verb, ViewResult};
+use tools::game::{Pos, Verb};
 
 static mut EXPLORER: ExplorerState = Pos { x: 32, y: 20 };
 
