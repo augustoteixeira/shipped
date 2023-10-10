@@ -170,7 +170,7 @@ impl Brains {
               },
     };
 
-    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/explorer.wasm")
+    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/warrior1.wasm")
       .context(LoadWasmSnafu { index: 0 as usize })?;
     let module =
       Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;

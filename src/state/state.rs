@@ -1,3 +1,5 @@
+use cfg_log::*;
+
 use line_drawing::Bresenham;
 use serde::{Deserialize, Serialize};
 use snafu::prelude::*;
@@ -126,6 +128,7 @@ impl State {
     tiles: Vec<Tile>,
   ) -> Self {
     assert!(tiles.len() == WIDTH * HEIGHT);
+    debug!("Creating new state...");
     let next_unique_id = entities.iter().fold(0, |a, (id, _)| max(a, *id));
     State {
       game_status: GameStatus::Running,
@@ -171,6 +174,10 @@ impl State {
     template: usize,
     pos: Pos,
   ) -> Result<(), StateError> {
+    debug!(
+      "Building entity: team {:?} at {:?} from template {:?}",
+      team, pos, template
+    );
     ensure!(!self.has_entity(pos), OccupiedTileSnafu { pos });
     let entity = self
       .get_creature(team, template)
@@ -191,6 +198,10 @@ impl State {
     template: usize,
     pos: Pos,
   ) -> Result<(), StateError> {
+    debug!(
+      "Constructing entity from id {:?}, template {:?} at {:?}",
+      entity_id, template, pos
+    );
     ensure!(!self.has_entity(pos), OccupiedTileSnafu { pos: pos });
     let entity = self.get_mut_entity_by_id(entity_id)?;
     let constr_cost = cost(&creature);
@@ -206,6 +217,7 @@ impl State {
     self.build_entity_from_template(team, 0, template, pos)
   }
   pub fn remove_entity(&mut self, pos: Pos) -> Result<(), StateError> {
+    debug!("Removing entity at {:?}", pos);
     let id = self.tiles[pos.to_index()]
       .entity_id
       .ok_or(StateError::EmptyTile { pos })?;
@@ -269,6 +281,7 @@ impl State {
     Ok(())
   }
   pub fn move_entity(&mut self, from: Pos, to: Pos) -> Result<(), StateError> {
+    debug!("Moving entity from {:?} to {:?}", from, to);
     ensure!(self.has_entity(from), EmptyTileSnafu { pos: from });
     ensure!(!self.has_entity(to), OccupiedTileSnafu { pos: to });
     let id = self.tiles[from.to_index()].entity_id.unwrap();
@@ -297,6 +310,7 @@ impl State {
     to: Pos,
     load: &Materials,
   ) -> Result<(), StateError> {
+    debug!("Moving material from {:?} to {:?}", from, to);
     ensure!(self.has_entity(to), EmptyTileSnafu { pos: to });
     ensure!(
       self.get_floor_mat(from).ge(load),
@@ -323,6 +337,7 @@ impl State {
     to: Pos,
     load: &Materials,
   ) -> Result<(), StateError> {
+    debug!("Moving material from {:?} to floor {:?}", from, to);
     ensure!(self.has_entity(from), EmptyTileSnafu { pos: from });
     let entity = self.get_mut_entity(from)?;
     ensure!(
@@ -337,6 +352,7 @@ impl State {
     Ok(())
   }
   pub fn attack(&mut self, pos: Pos, damage: usize) -> Result<(), StateError> {
+    debug!("Attacking pos {:?} for damage {:?}", pos, damage);
     let entity = self.get_mut_entity(pos)?;
     if entity.hp > damage {
       entity.hp -= damage;
@@ -353,6 +369,7 @@ impl State {
   }
 
   pub fn execute_command(&mut self, command: Command) -> Result<(), StateError> {
+    debug!("Executing command {:?}", command);
     if self.game_status != GameStatus::Running {
       return Ok(());
     }

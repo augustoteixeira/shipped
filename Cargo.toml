@@ -9,7 +9,8 @@ default-run = "gui"
 macroquad = "0.3"
 async-trait = "0.1.56"
 snafu = "0.7.1"
-log = "0.4.0"
+cfg_log = "0.1.0"
+log = { version = "0.4.17", optional = true }
 env_logger = "0.9.0"
 serde = { version = "1.0", features = ["derive"]}
 serde_json = { version = "1.0" }
@@ -46,6 +47,7 @@ members = [
     "bots/bounce",
     "bots/eater",
     "bots/driller",
-    "bots/explorer",
     "bots/mover",
+    "bots/explorer",
+    "bots/warrior1",
 ]

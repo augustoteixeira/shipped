@@ -20,6 +20,7 @@ fn window_conf() -> Conf {
 
 #[macroquad::main(window_conf)]
 async fn main() {
+  env_logger::init();
   let mut landing = Landing::new(Rect::new(0.0, 0.0, WIN_WIDTH, WIN_HEIGHT), ());
   let mut seconds: f64 = get_time();
 
