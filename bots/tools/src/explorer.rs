@@ -20,8 +20,8 @@ impl Explorer {
     let move_verb = mover.next();
     if let Verb::Wait = move_verb {
       unsafe {
-        let x = (get_rand() % 64) as usize;
-        let y = (get_rand() % 64) as usize;
+        let x = (get_rand() % 60) as usize;
+        let y = (get_rand() % 60) as usize;
         let target = self.pointer as *mut Pos;
         *target = Pos { x, y };
       }

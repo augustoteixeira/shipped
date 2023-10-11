@@ -11,9 +11,9 @@ pub fn next() -> Verb {
   let entity: ViewResult = decode_view(code);
   match entity {
     ViewResult::Entity(e) => {
-      if let Team::Red = e.team {
-        return Verb::Drill(Direction::North);
-      }
+      //if let Team::Red = e.team {
+      return Verb::Drill(Direction::North);
+      //}
     }
     _ => {}
   }

@@ -105,7 +105,7 @@ impl Ui for View {
       None => unreachable!(),
     };
 
-    let script = run_match(&level, &blue_squad, &red_squad, 1000);
+    let script = run_match(&level, &blue_squad, &red_squad, 10);
 
     let state = script.genesis;
     let frames = script.frames;

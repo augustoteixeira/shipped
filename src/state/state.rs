@@ -40,8 +40,8 @@ pub struct State {
   red_codes: [Option<Code>; NUM_CODES],
   pub entities: HashMap<Id, ActiveEntity>,
   next_unique_id: usize,
-  blue_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
-  red_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
+  pub blue_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
+  pub red_templates: [Option<TemplateEntity>; NUM_TEMPLATES],
   pub tiles: Vec<Tile>,
 }
 
@@ -355,6 +355,7 @@ impl State {
     debug!("Attacking pos {:?} for damage {:?}", pos, damage);
     let entity = self.get_mut_entity(pos)?;
     if entity.hp > damage {
+      debug!("Hp from {:} to {:}", entity.hp, entity.hp - damage);
       entity.hp -= damage;
     } else {
       self.remove_entity(pos)?;

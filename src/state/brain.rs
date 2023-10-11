@@ -4,6 +4,8 @@ use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
 use snafu::prelude::*;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -20,7 +22,19 @@ use crate::state::encoder::{
 };
 use crate::state::entity::Team;
 use crate::state::geometry::{add_displace, Pos};
-use crate::state::state::{Command, Id, State};
+use crate::state::state::{Command, Id, State, StateError};
+
+macro_rules! skip_fail {
+  ($res:expr) => {
+    match $res {
+      Ok(val) => val,
+      Err(e) => {
+        println!("An error: {}; skipped.", e);
+        continue;
+      }
+    }
+  };
+}
 
 #[derive(Debug, Snafu)]
 pub enum BrainError {
@@ -36,6 +50,8 @@ pub enum BrainError {
     source: std::io::Error,
     index: usize,
   },
+  #[snafu(display("No entity in state"))]
+  NoEntity { source: StateError },
 }
 
 #[derive(Debug, Snafu)]
@@ -49,10 +65,10 @@ pub enum ExecutionError {
 pub struct Brains {
   store: Store,
   env: Env,
-  blue_modules: [Module; NUM_TEMPLATES],
-  red_modules: [Module; NUM_TEMPLATES],
-  blue_brains: HashMap<Id, Instance>,
-  red_brains: HashMap<Id, Instance>,
+  blue_modules: [Option<Module>; NUM_TEMPLATES],
+  red_modules: [Option<Module>; NUM_TEMPLATES],
+  blue_brains: HashMap<Id, Option<Instance>>,
+  red_brains: HashMap<Id, Option<Instance>>,
 }
 
 #[derive(Clone)]
@@ -60,6 +76,28 @@ struct Env {
   state: Arc<Mutex<State>>,
   current: Arc<Mutex<Id>>,
   rng: Arc<Mutex<StdRng>>,
+}
+
+pub fn get_code_vec() -> Vec<(u64, PathBuf)> {
+  let wasm_dir = Path::new("./target/wasm32-unknown-unknown/release");
+  assert!(wasm_dir.is_dir());
+  let mut code_vec = vec![];
+  for entry in fs::read_dir(wasm_dir).unwrap() {
+    let entry = skip_fail!(entry);
+    let path = entry.path();
+    let metadata = skip_fail!(fs::metadata(&path));
+    let last_modified = skip_fail!(skip_fail!(metadata.modified()).elapsed()).as_secs();
+    if metadata.is_file() {
+      let extension = Path::new(&path).extension();
+      if let Some(ext) = extension {
+        if ext == "wasm" {
+          code_vec.push((last_modified, path))
+        }
+      }
+    }
+  }
+  code_vec.sort_by_key(|(a, _)| -(a.clone() as i64));
+  code_vec
 }
 
 fn get_unencoded_coord(env: FunctionEnvMut<Env>) -> Pos {
@@ -177,21 +215,86 @@ impl Brains {
               },
     };
 
-    let wasm_bytes = std::fs::read("./target/wasm32-unknown-unknown/release/warrior1.wasm")
-      .context(LoadWasmSnafu { index: 0 as usize })?;
-    let module =
-      Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;
+    let code_vec: Vec<(u64, PathBuf)> = get_code_vec();
 
-    let blue_modules: [Module; NUM_TEMPLATES] = init_array(|_| module.clone());
-    let red_modules: [Module; NUM_TEMPLATES] = init_array(|_| module.clone());
-    //let import_object = imports! {};
-    let mut blue_brains: HashMap<Id, Instance> = HashMap::new();
-    for id in id_vec {
-      let instance = Instance::new(&mut store, &module, &import_object)
-        .context(CreateInstanceSnafu { index: 0 as usize })?;
-      blue_brains.insert(id, instance.clone());
+    let mut blue_modules: [Option<Module>; NUM_TEMPLATES] = init_array(|_| None);
+    let mut blue_brain_index: HashMap<usize, usize> = HashMap::new();
+    let mut red_modules: [Option<Module>; NUM_TEMPLATES] = init_array(|_| None);
+    let mut red_brain_index: HashMap<usize, usize> = HashMap::new();
+
+    for (index, template) in state
+      .lock()
+      .unwrap()
+      .blue_templates
+      .clone()
+      .iter()
+      .enumerate()
+    {
+      if let Some(template_entity) = template {
+        if let Some(brain) = template_entity.brain.clone() {
+          let wasm_bytes = std::fs::read(code_vec[index].1.clone())
+            .context(LoadWasmSnafu { index: 0 as usize })?;
+          blue_brain_index.insert(brain.code_index, index);
+          let module =
+            Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;
+          blue_modules[index] = Some(module.clone());
+        }
+      }
     }
-    let red_brains: HashMap<Id, Instance> = HashMap::new();
+
+    for (index, template) in state
+      .lock()
+      .unwrap()
+      .red_templates
+      .clone()
+      .iter()
+      .enumerate()
+    {
+      if let Some(template_entity) = template {
+        if let Some(brain) = template_entity.brain.clone() {
+          let wasm_bytes = std::fs::read(code_vec[index].1.clone())
+            .context(LoadWasmSnafu { index: 0 as usize })?;
+          red_brain_index.insert(brain.code_index, index);
+          let module =
+            Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;
+          red_modules[index] = Some(module.clone());
+        }
+      }
+    }
+
+    let mut blue_brains: HashMap<Id, Option<Instance>> = HashMap::new();
+    let mut red_brains: HashMap<Id, Option<Instance>> = HashMap::new();
+
+    for id in id_vec {
+      let state_guard = state.lock().unwrap();
+      let entity = state_guard.get_entity_by_id(id).context(NoEntitySnafu {})?;
+      let (module_vec, brains, brain_index): (
+        &[Option<Module>; NUM_TEMPLATES],
+        &mut HashMap<Id, Option<Instance>>,
+        &HashMap<usize, usize>,
+      ) = match entity.team {
+        Team::Blue => (&blue_modules, &mut blue_brains, &blue_brain_index),
+        Team::Red => (&red_modules, &mut red_brains, &red_brain_index),
+      };
+      let optional_module = match entity.brain.clone() {
+        None => None,
+        Some(brain) => {
+          // TODO: this is terrible, so one needs to fix it. The problem is that
+          // once we instantiate an entity from a template, we erase the information
+          // about which template we used.
+          module_vec[*brain_index.get(&brain.code_index).unwrap()].clone()
+        }
+      };
+      let instance: Option<Instance> = match optional_module {
+        None => None,
+        Some(module) => Some(
+          Instance::new(&mut store, &module, &import_object)
+            .context(CreateInstanceSnafu { index: 0 as usize })?,
+        ),
+      };
+      brains.insert(id, instance.clone());
+    }
+
     Ok(Brains {
       store,
       env: Env {
@@ -215,26 +318,33 @@ impl Brains {
     let team = entity.team.clone();
     drop(current);
     drop(state);
-    let execute = self
-      .blue_brains
-      .get(&id)
-      .unwrap()
-      .exports
-      .get_function("execute")
-      .context(NoExecuteSnafu { index: id })?;
-    let result = execute
-      .call(&mut self.store, &[])
-      .context(RuntimeSnafu { index: id })?;
-    let value = match result[0] {
-      Value::I64(r) => r,
-      _ => 0x0001000000000000,
-    };
-    Ok(Command {
-      entity_id: id,
-      verb: match team {
-        Team::Blue => decode_verb(value),
-        Team::Red => decode_verb(value).invert(),
-      },
-    })
+    match self.blue_brains.get(&id) {
+      None | Some(None) => {
+        return Ok(Command {
+          entity_id: id,
+          verb: super::state::Verb::Wait,
+        })
+      }
+      Some(Some(instance)) => {
+        let execute = instance
+          .exports
+          .get_function("execute")
+          .context(NoExecuteSnafu { index: id })?;
+        let result = execute
+          .call(&mut self.store, &[])
+          .context(RuntimeSnafu { index: id })?;
+        let value = match result[0] {
+          Value::I64(r) => r,
+          _ => 0x0001000000000000,
+        };
+        Ok(Command {
+          entity_id: id,
+          verb: match team {
+            Team::Blue => decode_verb(value),
+            Team::Red => decode_verb(value).invert(),
+          },
+        })
+      }
+    }
   }
 }

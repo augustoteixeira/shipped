@@ -675,13 +675,6 @@ impl Ui for NewBF {
             }
           }
           self.update_main_panel();
-          self.screen = Screen::Entity(
-            EntityEdit::new(
-              trim_margins(self.rect.clone(), 0.15, 0.15, 0.15, 0.15),
-              self.state.get_entities()[i].clone(),
-            ),
-            i,
-          );
           None
         }
         _ => None,

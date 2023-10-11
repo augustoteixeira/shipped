@@ -9,6 +9,7 @@ use super::ui::{
   build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
 };
 use crate::state::bf::EntityState;
+use crate::state::brain::get_code_vec;
 use crate::state::constants::NUM_TEMPLATES;
 use crate::state::entity::{Full, Mix, MixTemplate, MovementType};
 
@@ -50,6 +51,7 @@ pub struct EntityEdit {
   pub entity: EntityState,
   old_entity: EntityState,
   rect: Rect,
+  message: String,
   panel: ButtonPanel<Command>,
 }
 
@@ -264,15 +266,28 @@ impl Ui for EntityEdit {
     let mut ee = EntityEdit {
       rect,
       entity: e.clone(),
+      message: "Editing bot".to_string(),
       panel,
       old_entity: e,
     };
     ee.update_main_panel();
     ee
   }
-
   async fn draw(&self) {
-    draw_rectangle(self.rect.x, self.rect.y, self.rect.w, self.rect.h, BLACK);
+    draw_rectangle(
+      self.rect.x,
+      self.rect.y - 40.0,
+      self.rect.w,
+      self.rect.h + 40.0,
+      BLACK,
+    );
+    draw_text(
+      &self.message,
+      self.rect.x + 20.0,
+      self.rect.y,
+      40.0,
+      DARKBLUE,
+    );
     self.panel.draw().await;
   }
 
@@ -325,7 +340,18 @@ impl Ui for EntityEdit {
             }
             Attribute::CodeID => {
               if let Mix::Full(Full { code_index: c, .. }) = &mut mix.brain {
-                *c = plus_minus(&input, *c, sign);
+                let new_code = plus_minus(&input, *c, sign);
+                if let Some((_, path)) = get_code_vec().get(new_code) {
+                  self.message = path
+                    .clone()
+                    .file_name()
+                    .unwrap()
+                    .to_os_string()
+                    .to_str()
+                    .unwrap_or("Unknown")
+                    .to_string();
+                  *c = new_code;
+                }
               }
             }
             Attribute::Gas => {
