@@ -2,17 +2,21 @@ Add WASM Coding
 ---------------
 
 - insert correct code from template
+  - fix bot file names
 - add gas
 
 UI
 --
 
-- fix bug in visualizing squads
-
 Misc Features
 -------------
 
-- add token verification for level/squad
+- add token verification when finishing level/squad
+
+Bugs
+----
+
+- squad selection screen glitch
 
 Code quality
 ------------
@@ -27,3 +31,4 @@ Content
 
 - create many levels
 - create many bots
+(look at google docs)
