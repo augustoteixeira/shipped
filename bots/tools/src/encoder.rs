@@ -37,7 +37,7 @@ pub fn encode_materials(mat: Materials) -> u32 {
   (copper << 24) + (plutonium << 16) + (silicon << 8) + carbon
 }
 
-pub fn encode_displace(disp: Displace) -> u16 {
+pub fn encode_displace(disp: &Displace) -> u16 {
   let signed_x: i8 = min(max(disp.x, -127), 127).try_into().unwrap();
   let signed_y: i8 = min(max(disp.y, -127), 127).try_into().unwrap();
   let x: u16 = signed_x.to_be_bytes()[0] as u16;
@@ -63,7 +63,7 @@ pub fn encode_verb(verb: Verb) -> i64 {
       0x0004000000000000 + ((neigh_code as i64) << 40) + (mat_code as i64)
     }
     Verb::Shoot(displ) => {
-      let displ_code = encode_displace(displ);
+      let displ_code = encode_displace(&displ);
       0x0005000000000000 + ((displ_code as i64) << 32)
     }
     Verb::Drill(dir) => {

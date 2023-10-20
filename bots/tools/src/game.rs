@@ -48,6 +48,7 @@ impl Pos {
   }
 }
 
+#[derive(Clone)]
 pub struct Displace {
   pub x: i64,
   pub y: i64,

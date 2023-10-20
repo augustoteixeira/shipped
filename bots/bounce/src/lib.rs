@@ -8,7 +8,7 @@ extern "C" {
 
 #[no_mangle]
 pub fn execute() -> i64 {
-  let code = unsafe { get_materials(encode_displace(Displace { x: 0, y: 10 })) };
+  let code = unsafe { get_materials(encode_displace(&Displace { x: 0, y: 10 })) };
   let tile = decode_tile_materials(code);
   match tile {
     Some(_) => encode_verb(GO_NORTH),

@@ -10,7 +10,7 @@ use rand_chacha::ChaCha8Rng;
 
 use super::ui::{build_incrementer, split, trim_margins, Button, ButtonPanel, Input, Rect, Ui};
 use crate::state::bf::{load_level_file, load_squad_file, BFState};
-use crate::state::constants::{HEIGHT, WIDTH};
+use crate::state::constants::{HEIGHT, NUMBER_TURNS, WIDTH};
 use crate::state::run::run_match;
 use crate::state::state::{Frame, GameStatus, State};
 use crate::ui::canvas::{draw_entity_map, draw_floor, draw_mat_map};
@@ -105,7 +105,7 @@ impl Ui for View {
       None => unreachable!(),
     };
 
-    let script = run_match(&level, &blue_squad, &red_squad, 10);
+    let script = run_match(&level, &blue_squad, &red_squad, NUMBER_TURNS);
 
     let state = script.genesis;
     let frames = script.frames;

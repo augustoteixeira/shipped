@@ -27,14 +27,14 @@ impl Mover {
     let target: Pos = unsafe { (*(self.pointer as *mut Pos)).clone() };
     match x.cmp(&target.x) {
       Ordering::Less => {
-        let code = unsafe { get_entity(encode_displace(Displace { x: 1, y: 0 })) };
+        let code = unsafe { get_entity(encode_displace(&Displace { x: 1, y: 0 })) };
         let viewed = decode_view(code);
         if let ViewResult::Empty = viewed {
           return GO_EAST;
         }
       }
       Ordering::Greater => {
-        let code = unsafe { get_entity(encode_displace(Displace { x: -1, y: 0 })) };
+        let code = unsafe { get_entity(encode_displace(&Displace { x: -1, y: 0 })) };
         let viewed = decode_view(code);
         if let ViewResult::Empty = viewed {
           return GO_WEST;
@@ -44,14 +44,14 @@ impl Mover {
     };
     match y.cmp(&target.y) {
       Ordering::Less => {
-        let code = unsafe { get_entity(encode_displace(Displace { x: 0, y: 1 })) };
+        let code = unsafe { get_entity(encode_displace(&Displace { x: 0, y: 1 })) };
         let viewed = decode_view(code);
         if let ViewResult::Empty = viewed {
           return GO_NORTH;
         }
       }
       Ordering::Greater => {
-        let code = unsafe { get_entity(encode_displace(Displace { x: 0, y: -1 })) };
+        let code = unsafe { get_entity(encode_displace(&Displace { x: 0, y: -1 })) };
         let viewed = decode_view(code);
         if let ViewResult::Empty = viewed {
           return GO_SOUTH;

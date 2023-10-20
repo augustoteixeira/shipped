@@ -4,7 +4,6 @@ use rand::rngs::StdRng;
 use rand::Rng;
 use rand::SeedableRng;
 use snafu::prelude::*;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -23,18 +22,6 @@ use crate::state::encoder::{
 use crate::state::entity::Team;
 use crate::state::geometry::{add_displace, Pos};
 use crate::state::state::{Command, Id, State, StateError};
-
-macro_rules! skip_fail {
-  ($res:expr) => {
-    match $res {
-      Ok(val) => val,
-      Err(e) => {
-        println!("An error: {}; skipped.", e);
-        continue;
-      }
-    }
-  };
-}
 
 #[derive(Debug, Snafu)]
 pub enum BrainError {
@@ -76,28 +63,6 @@ struct Env {
   state: Arc<Mutex<State>>,
   current: Arc<Mutex<Id>>,
   rng: Arc<Mutex<StdRng>>,
-}
-
-pub fn get_code_vec() -> Vec<(u64, PathBuf)> {
-  let wasm_dir = Path::new("./target/wasm32-unknown-unknown/release");
-  assert!(wasm_dir.is_dir());
-  let mut code_vec = vec![];
-  for entry in fs::read_dir(wasm_dir).unwrap() {
-    let entry = skip_fail!(entry);
-    let path = entry.path();
-    let metadata = skip_fail!(fs::metadata(&path));
-    let last_modified = skip_fail!(skip_fail!(metadata.modified()).elapsed()).as_secs();
-    if metadata.is_file() {
-      let extension = Path::new(&path).extension();
-      if let Some(ext) = extension {
-        if ext == "wasm" {
-          code_vec.push((last_modified, path))
-        }
-      }
-    }
-  }
-  code_vec.sort_by_key(|(a, _)| -(a.clone() as i64));
-  code_vec
 }
 
 fn get_unencoded_coord(env: FunctionEnvMut<Env>) -> Pos {
@@ -215,12 +180,16 @@ impl Brains {
               },
     };
 
-    let code_vec: Vec<(u64, PathBuf)> = get_code_vec();
+    //let code_vec: HashMap<u128, String> = get_code_vec();
 
     let mut blue_modules: [Option<Module>; NUM_TEMPLATES] = init_array(|_| None);
-    let mut blue_brain_index: HashMap<usize, usize> = HashMap::new();
+    let mut blue_brain_index: HashMap<String, usize> = HashMap::new();
     let mut red_modules: [Option<Module>; NUM_TEMPLATES] = init_array(|_| None);
-    let mut red_brain_index: HashMap<usize, usize> = HashMap::new();
+    let mut red_brain_index: HashMap<String, usize> = HashMap::new();
+    {
+      let blue_templates = state.lock().unwrap().blue_templates.clone();
+      println!("{:?}", blue_templates);
+    }
 
     for (index, template) in state
       .lock()
@@ -232,9 +201,13 @@ impl Brains {
     {
       if let Some(template_entity) = template {
         if let Some(brain) = template_entity.brain.clone() {
-          let wasm_bytes = std::fs::read(code_vec[index].1.clone())
+          // println!(
+          //   "index: {index}, brain.code = {:?}, code_vec[index] = {:?}",
+          //   brain.code_index, code_vec[index]
+          // );
+          let wasm_bytes = std::fs::read(Path::new(&brain.code_name))
             .context(LoadWasmSnafu { index: 0 as usize })?;
-          blue_brain_index.insert(brain.code_index, index);
+          blue_brain_index.insert(brain.code_name, index);
           let module =
             Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;
           blue_modules[index] = Some(module.clone());
@@ -252,9 +225,9 @@ impl Brains {
     {
       if let Some(template_entity) = template {
         if let Some(brain) = template_entity.brain.clone() {
-          let wasm_bytes = std::fs::read(code_vec[index].1.clone())
+          let wasm_bytes = std::fs::read(Path::new(&brain.code_name))
             .context(LoadWasmSnafu { index: 0 as usize })?;
-          red_brain_index.insert(brain.code_index, index);
+          red_brain_index.insert(brain.code_name, index);
           let module =
             Module::new(&store, wasm_bytes).context(CreateModuleSnafu { index: 0 as usize })?;
           red_modules[index] = Some(module.clone());
@@ -271,7 +244,7 @@ impl Brains {
       let (module_vec, brains, brain_index): (
         &[Option<Module>; NUM_TEMPLATES],
         &mut HashMap<Id, Option<Instance>>,
-        &HashMap<usize, usize>,
+        &HashMap<String, usize>,
       ) = match entity.team {
         Team::Blue => (&blue_modules, &mut blue_brains, &blue_brain_index),
         Team::Red => (&red_modules, &mut red_brains, &red_brain_index),
@@ -282,7 +255,7 @@ impl Brains {
           // TODO: this is terrible, so one needs to fix it. The problem is that
           // once we instantiate an entity from a template, we erase the information
           // about which template we used.
-          module_vec[*brain_index.get(&brain.code_index).unwrap()].clone()
+          module_vec[*brain_index.get(&brain.code_name).unwrap()].clone()
         }
       };
       let instance: Option<Instance> = match optional_module {
@@ -318,7 +291,11 @@ impl Brains {
     let team = entity.team.clone();
     drop(current);
     drop(state);
-    match self.blue_brains.get(&id) {
+    let current_brain = match team {
+      Team::Blue => &self.blue_brains,
+      Team::Red => &self.red_brains,
+    };
+    match current_brain.get(&id) {
       None | Some(None) => {
         return Ok(Command {
           entity_id: id,

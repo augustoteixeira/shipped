@@ -65,7 +65,7 @@ pub type Code = Vec<u8>;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Full {
   pub half: Half,
-  pub code_index: usize,
+  pub code_name: String,
   pub gas: usize,
 }
 
@@ -143,11 +143,11 @@ impl MixTemplate {
           if f.half != h { return false; }
         }
         if let Mix::Full(Full{
-          half: h, code_index: c, gas: g
-        }) = refer.brain {
-          if f.half != h { return false; }
-          if f.code_index != c { return false; }
-          if f.gas != g { return false; }
+          half: h, code_name: n, gas: g
+        }) = &refer.brain {
+          if f.half != &h[..] { return false; }
+          if f.code_name != &n[..] { return false; }
+          if f.gas != *g { return false; }
         }
       }
     }

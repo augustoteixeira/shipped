@@ -1,6 +1,9 @@
 extern crate rand;
 extern crate rand_chacha;
 use std::cmp::{max, min};
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
 
 use async_trait::async_trait;
 use macroquad::prelude::*;
@@ -9,9 +12,48 @@ use super::ui::{
   build_incrementer, plus_minus, split, trim_margins, Button, ButtonPanel, Input, Rect, Sign, Ui,
 };
 use crate::state::bf::EntityState;
-use crate::state::brain::get_code_vec;
+//use crate::state::brain::get_code_vec;
 use crate::state::constants::NUM_TEMPLATES;
 use crate::state::entity::{Full, Mix, MixTemplate, MovementType};
+
+macro_rules! skip_fail {
+  ($res:expr) => {
+    match $res {
+      Ok(val) => val,
+      Err(e) => {
+        println!("An error: {}; skipped.", e);
+        continue;
+      }
+    }
+  };
+}
+
+pub fn get_code_vec() -> HashMap<String, usize> {
+  let wasm_dir = Path::new("./target/wasm32-unknown-unknown/release");
+  assert!(wasm_dir.is_dir());
+  let mut code_vec = HashMap::<String, usize>::new();
+  let mut i = 0;
+  for entry in fs::read_dir(wasm_dir).unwrap() {
+    let entry = skip_fail!(entry);
+    let path = entry.path();
+    let metadata = skip_fail!(fs::metadata(&path));
+    //let last_modified = skip_fail!(skip_fail!(metadata.modified()).elapsed()).as_nanos();
+    if metadata.is_file() {
+      let extension = Path::new(&path).extension();
+      if let Some(ext) = extension {
+        if ext == "wasm" {
+          code_vec.insert(path.into_os_string().into_string().unwrap(), i);
+          i += 1;
+        }
+      }
+    }
+  }
+  //code_vec.sort_by_key(|(a, _)| -(a.clone() as i64));
+  for (i, x) in code_vec.iter().enumerate() {
+    println!("{:}: {:?}", i, x);
+  }
+  code_vec
+}
 
 #[derive(Clone, Debug)]
 pub enum EntityEditCommand {
@@ -50,6 +92,7 @@ pub enum Command {
 pub struct EntityEdit {
   pub entity: EntityState,
   old_entity: EntityState,
+  code_index: HashMap<String, usize>,
   rect: Rect,
   message: String,
   panel: ButtonPanel<Command>,
@@ -185,7 +228,7 @@ impl EntityEdit {
             .into_iter()
             .map(|r| trim_margins(r, 0.1, 0.1, 0.1, 0.1))
             .collect();
-        match e.brain {
+        match &e.brain {
           Mix::Bare => panel.push(Button::<Command>::new(
             trim_margins(rects[3].clone(), 0.1, 0.1, 0.1, 0.1),
             (
@@ -217,7 +260,7 @@ impl EntityEdit {
           }
           Mix::Full(Full {
             half: h,
-            code_index: ci,
+            code_name: n,
             gas,
           }) => {
             panel.append(&mut build_incrementer::<Command>(
@@ -237,14 +280,14 @@ impl EntityEdit {
             panel.append(&mut build_incrementer::<Command>(
               &fourth_row_rects[2],
               "Code".to_string(),
-              ci,
+              *self.code_index.get(&n.clone()).unwrap(),
               Command::PM(Attribute::CodeID, Sign::Plus),
               Command::PM(Attribute::CodeID, Sign::Minus),
             ));
             panel.append(&mut build_incrementer::<Command>(
               &fourth_row_rects[3],
               "Gas".to_string(),
-              gas,
+              *gas,
               Command::PM(Attribute::Gas, Sign::Plus),
               Command::PM(Attribute::Gas, Sign::Minus),
             ));
@@ -266,6 +309,7 @@ impl Ui for EntityEdit {
     let mut ee = EntityEdit {
       rect,
       entity: e.clone(),
+      code_index: get_code_vec(),
       message: "Editing bot".to_string(),
       panel,
       old_entity: e,
@@ -339,18 +383,26 @@ impl Ui for EntityEdit {
               }
             }
             Attribute::CodeID => {
-              if let Mix::Full(Full { code_index: c, .. }) = &mut mix.brain {
-                let new_code = plus_minus(&input, *c, sign);
-                if let Some((_, path)) = get_code_vec().get(new_code) {
-                  self.message = path
-                    .clone()
-                    .file_name()
-                    .unwrap()
-                    .to_os_string()
-                    .to_str()
-                    .unwrap_or("Unknown")
-                    .to_string();
-                  *c = new_code;
+              if let Mix::Full(Full { code_name: n, .. }) = &mut mix.brain {
+                let code_index = *self.code_index.get(&n.clone()).unwrap();
+                let new_code = plus_minus(&input, code_index, sign);
+                let inverted_code_index: HashMap<usize, String> = self
+                  .code_index
+                  .clone()
+                  .iter()
+                  .map(|(a, b)| (b.clone(), a.clone()))
+                  .collect();
+                println!("{:?}", inverted_code_index.get(&new_code));
+                if let Some(path) = inverted_code_index.get(&new_code) {
+                  self.message = path.clone();
+                  // .clone()
+                  // .file_name()
+                  // .unwrap()
+                  // .to_os_string()
+                  // .to_str()
+                  // .unwrap_or("Unknown")
+                  // .to_string();
+                  *n = path.clone();
                 }
               }
             }
@@ -391,7 +443,7 @@ impl Ui for EntityEdit {
           if let Mix::Half(h) = mix.brain {
             mix.brain = Mix::Full(Full {
               half: h.clone(),
-              code_index: 0,
+              code_name: self.code_index.clone().iter().next().unwrap().0.clone(),
               gas: 0,
             });
           }
