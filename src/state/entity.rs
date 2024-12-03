@@ -58,6 +58,7 @@ pub struct ActiveEntity {
   pub brain: Option<Full>,
 }
 
+// Specifies which entities this one can build
 pub type Half = [u8; NUM_SUB_ENTITIES];
 
 pub type Code = Vec<u8>;
